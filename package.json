@@ -1,0 +1,15 @@
+{
+  "name": "hf-access-desk",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A private dashboard for managing gated Hugging Face dataset access requests.",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node --watch server.mjs",
+    "check": "node --check server.mjs && node --check public/app.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

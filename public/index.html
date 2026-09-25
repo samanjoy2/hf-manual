@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <meta name="theme-color" content="#f6f3ec" />
+    <title>HF Access Desk</title>
+    <meta name="description" content="Review gated Hugging Face dataset access requests in one place." />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div id="loginView" class="login-view hidden">
+      <main class="login-card">
+        <div class="brand-mark" aria-hidden="true">HF</div>
+        <p class="eyebrow">Private workspace</p>
+        <h1>Access Desk</h1>
+        <p class="muted">Enter the dashboard password to review your dataset requests.</p>
+        <form id="loginForm">
+          <label for="password">Dashboard password</label>
+          <input id="password" name="password" type="password" autocomplete="current-password" required />
+          <p id="loginError" class="form-error" role="alert"></p>
+          <button class="button primary wide" type="submit">Open dashboard</button>
+        </form>
+      </main>
+    </div>
+
+    <div id="appView" class="app-shell hidden">
+      <aside class="sidebar">
+        <a class="brand" href="/" aria-label="HF Access Desk home">
+          <span class="brand-mark small">HF</span>
+          <span>Access Desk</span>
+        </a>
+        <nav aria-label="Request status">
+          <button class="nav-item active" data-status="pending">
+            <span class="nav-icon amber">●</span><span>Pending</span><span id="navPending" class="nav-count">0</span>
+          </button>
+          <button class="nav-item" data-status="accepted">
+            <span class="nav-icon green">●</span><span>Accepted</span><span id="navAccepted" class="nav-count">0</span>
+          </button>
+          <button class="nav-item" data-status="rejected">
+            <span class="nav-icon red">●</span><span>Rejected</span><span id="navRejected" class="nav-count">0</span>
+          </button>
+          <button class="nav-item" data-status="all">
+            <span class="nav-icon ink">●</span><span>All requests</span><span id="navAll" class="nav-count">0</span>
+          </button>
+        </nav>
+        <div class="sidebar-foot">
+          <div id="accountMini" class="account-mini"></div>
+          <button id="logoutButton" class="text-button hidden">Sign out</button>
+        </div>
+      </aside>
+
+      <main class="main-content">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Gated dataset requests</p>
+            <h1 id="pageTitle">Pending review</h1>
+          </div>
+          <div class="topbar-actions">
+            <span id="lastUpdated" class="last-updated"></span>
+            <button id="refreshButton" class="icon-button" title="Refresh from Hugging Face" aria-label="Refresh from Hugging Face">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6v5h-5M4 18v-5h5M18.5 9A7 7 0 0 0 6.2 6.2L4 8m16 8-2.2 1.8A7 7 0 0 1 5.5 15"/></svg>
+            </button>
+          </div>
+        </header>
+
+        <section id="setupPanel" class="setup-panel hidden" aria-live="polite"></section>
+
+        <section id="dashboardContent" class="dashboard-content hidden">
+          <div class="stats-grid">
+            <article class="stat-card pending-stat">
+              <span>Awaiting decision</span><strong id="statPending">0</strong><small>across all datasets</small>
+            </article>
+            <article class="stat-card">
+              <span>Gated datasets</span><strong id="statDatasets">0</strong><small id="datasetHealth">connected</small>
+            </article>
+            <article class="stat-card">
+              <span>Accepted users</span><strong id="statAccepted">0</strong><small>total approvals</small>
+            </article>
+          </div>
+
+          <div id="warningBar" class="warning-bar hidden" role="status"></div>
+
+          <section class="request-panel">
+            <div class="toolbar">
+              <div class="search-wrap">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+                <input id="searchInput" type="search" placeholder="Search people, email, or dataset…" aria-label="Search requests" />
+              </div>
+              <select id="datasetFilter" aria-label="Filter by dataset"><option value="all">All datasets</option></select>
+              <button id="exportButton" class="button secondary">Export CSV</button>
+            </div>
+
+            <div id="bulkBar" class="bulk-bar hidden">
+              <span><strong id="selectedCount">0</strong> selected</span>
+              <div>
+                <button class="button secondary small-action" data-bulk-action="rejected">Reject</button>
+                <button class="button primary small-action" data-bulk-action="accepted">Approve</button>
+              </div>
+            </div>
+
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th class="check-cell"><input id="selectAll" type="checkbox" aria-label="Select all visible requests" /></th>
+                    <th>Requester</th>
+                    <th>Dataset</th>
+                    <th>Requested</th>
+                    <th>Status</th>
+                    <th><span class="sr-only">Actions</span></th>
+                  </tr>
+                </thead>
+                <tbody id="requestRows"></tbody>
+              </table>
+              <div id="emptyState" class="empty-state hidden">
+                <div class="empty-icon">✓</div>
+                <h2>Queue is clear</h2>
+                <p>No requests match the current view.</p>
+              </div>
+              <div id="loadingState" class="loading-state">
+                <div class="spinner"></div><span>Collecting requests from your datasets…</span>
+              </div>
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="confirmDialog">
+      <form method="dialog" id="confirmForm">
+        <button class="dialog-close" value="cancel" aria-label="Close">×</button>
+        <p class="eyebrow">Confirm action</p>
+        <h2 id="confirmTitle">Approve request?</h2>
+        <p id="confirmMessage" class="muted"></p>
+        <div id="reasonWrap" class="reason-wrap hidden">
+          <label for="reasonInput">Reason <span>(optional, visible to the user)</span></label>
+          <textarea id="reasonInput" maxlength="200" rows="3" placeholder="Add a short reason…"></textarea>
+          <small><span id="reasonCount">0</span>/200</small>
+        </div>
+        <div class="dialog-actions">
+          <button class="button secondary" value="cancel">Cancel</button>
+          <button id="confirmAction" class="button primary" value="confirm">Confirm</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="toastRegion" class="toast-region" aria-live="polite"></div>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
