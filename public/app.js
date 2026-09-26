@@ -4,50 +4,48 @@ const state = {
   query: "",
   dataset: "all",
   selected: new Set(),
-  authRequired: false,
   pendingAction: null,
+  hasToken: false,
 };
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 const els = {
-  loginView: $("#loginView"), appView: $("#appView"), loginForm: $("#loginForm"), password: $("#password"), loginError: $("#loginError"),
+  setupView: $("#setupView"), appView: $("#appView"), tokenForm: $("#tokenForm"), tokenInput: $("#tokenInput"), tokenError: $("#tokenError"),
+  saveTokenButton: $("#saveTokenButton"), toggleToken: $("#toggleToken"), tokenHelp: $("#tokenHelp"), cancelTokenButton: $("#cancelTokenButton"), forgetTokenButton: $("#forgetTokenButton"),
   dashboardContent: $("#dashboardContent"), setupPanel: $("#setupPanel"), loadingState: $("#loadingState"), emptyState: $("#emptyState"),
   requestRows: $("#requestRows"), searchInput: $("#searchInput"), datasetFilter: $("#datasetFilter"), selectAll: $("#selectAll"),
   bulkBar: $("#bulkBar"), selectedCount: $("#selectedCount"), refreshButton: $("#refreshButton"), exportButton: $("#exportButton"),
-  pageTitle: $("#pageTitle"), lastUpdated: $("#lastUpdated"), warningBar: $("#warningBar"), accountMini: $("#accountMini"), logoutButton: $("#logoutButton"),
+  pageTitle: $("#pageTitle"), lastUpdated: $("#lastUpdated"), warningBar: $("#warningBar"), accountMini: $("#accountMini"), changeTokenButton: $("#changeTokenButton"),
   dialog: $("#confirmDialog"), confirmForm: $("#confirmForm"), confirmTitle: $("#confirmTitle"), confirmMessage: $("#confirmMessage"), confirmAction: $("#confirmAction"),
   reasonWrap: $("#reasonWrap"), reasonInput: $("#reasonInput"), reasonCount: $("#reasonCount"), toastRegion: $("#toastRegion"),
 };
 
-async function api(path, options = {}) {
-  const response = await fetch(path, {
-    ...options,
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
-  });
-  let payload = {};
-  try { payload = await response.json(); } catch {}
-  if (!response.ok) {
-    if (response.status === 401 && path !== "/api/auth/login") showLogin();
-    throw new Error(payload.error || `Request failed (${response.status})`);
-  }
-  return payload;
+function friendlyError(error) {
+  return String(error?.message || error || "Something went wrong.")
+    .replace(/^Error invoking remote method '[^']+': Error:\s*/, "")
+    .replace(/^Error:\s*/, "");
 }
 
 function escapeHtml(value = "") {
   return String(value).replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]);
 }
 
-function showLogin() {
+function showSetup(canCancel = false) {
   els.appView.classList.add("hidden");
-  els.loginView.classList.remove("hidden");
-  setTimeout(() => els.password.focus(), 0);
+  els.setupView.classList.remove("hidden");
+  els.cancelTokenButton.classList.toggle("hidden", !canCancel);
+  els.forgetTokenButton.classList.toggle("hidden", !state.hasToken);
+  els.tokenInput.value = "";
+  els.tokenInput.type = "password";
+  els.toggleToken.textContent = "Show";
+  els.tokenError.textContent = "";
+  setTimeout(() => els.tokenInput.focus(), 0);
 }
 
 function showApp() {
-  els.loginView.classList.add("hidden");
+  els.setupView.classList.add("hidden");
   els.appView.classList.remove("hidden");
-  els.logoutButton.classList.toggle("hidden", !state.authRequired);
 }
 
 function toast(message, type = "success") {
@@ -79,19 +77,14 @@ function visibleRequests() {
     if (state.status !== "all" && request.status !== state.status) return false;
     if (state.dataset !== "all" && request.repoId !== state.dataset) return false;
     if (!query) return true;
-    return [request.username, request.fullname, request.email, request.repoId]
-      .some((value) => String(value || "").toLowerCase().includes(query));
+    return [request.username, request.fullname, request.email, request.repoId].some((value) => String(value || "").toLowerCase().includes(query));
   });
 }
 
 function actionButtons(request) {
   const data = `data-id="${escapeHtml(request.id)}"`;
-  if (request.status === "pending") {
-    return `<button class="row-button danger" data-action="rejected" ${data}>Reject</button><button class="row-button approve" data-action="accepted" ${data}>Approve</button>`;
-  }
-  if (request.status === "accepted") {
-    return `<button class="row-button" data-action="pending" ${data}>Move to pending</button><button class="row-button danger" data-action="rejected" ${data}>Revoke</button>`;
-  }
+  if (request.status === "pending") return `<button class="row-button danger" data-action="rejected" ${data}>Reject</button><button class="row-button approve" data-action="accepted" ${data}>Approve</button>`;
+  if (request.status === "accepted") return `<button class="row-button" data-action="pending" ${data}>Move to pending</button><button class="row-button danger" data-action="rejected" ${data}>Revoke</button>`;
   return `<button class="row-button" data-action="reset" ${data}>Reset request</button><button class="row-button approve" data-action="accepted" ${data}>Approve</button>`;
 }
 
@@ -102,7 +95,7 @@ function renderTable() {
     return `<tr>
       <td class="check-cell"><input class="row-check" type="checkbox" aria-label="Select ${escapeHtml(request.username)}" data-id="${escapeHtml(request.id)}" ${state.selected.has(request.id) ? "checked" : ""}></td>
       <td><div class="person"><span class="initial">${escapeHtml(initials(request.fullname || request.username))}</span><div><strong>${escapeHtml(request.fullname || request.username)}</strong><span>@${escapeHtml(request.username)}${request.email ? ` · ${escapeHtml(request.email)}` : ""}</span></div></div></td>
-      <td><a class="repo-link" href="https://huggingface.co/datasets/${encodeURI(request.repoId)}" target="_blank" rel="noreferrer">${escapeHtml(request.repoId)}</a></td>
+      <td><a class="repo-link" href="https://huggingface.co/datasets/${encodeURI(request.repoId)}">${escapeHtml(request.repoId)}</a></td>
       <td><span class="date-primary">${escapeHtml(requested.date)}</span><span class="date-secondary">${escapeHtml(requested.time)}</span></td>
       <td><span class="status-pill status-${escapeHtml(request.status)}">${escapeHtml(request.status)}</span></td>
       <td><div class="row-actions">${actionButtons(request)}</div></td>
@@ -117,9 +110,8 @@ function renderTable() {
 }
 
 function renderBulkBar() {
-  const count = state.selected.size;
-  els.bulkBar.classList.toggle("hidden", count === 0);
-  els.selectedCount.textContent = count;
+  els.bulkBar.classList.toggle("hidden", state.selected.size === 0);
+  els.selectedCount.textContent = state.selected.size;
 }
 
 function renderOverview() {
@@ -132,23 +124,23 @@ function renderOverview() {
   $("#navRejected").textContent = data.counts.rejected;
   $("#navAll").textContent = data.requests.length;
   els.lastUpdated.textContent = `${data.cached ? "Cached" : "Updated"} ${new Intl.DateTimeFormat(undefined, { timeStyle: "short" }).format(new Date(data.fetchedAt))}`;
-
   const issueCount = data.datasets.reduce((sum, dataset) => sum + dataset.errors.length, 0) + data.discoveryErrors.length;
   $("#datasetHealth").textContent = issueCount ? `${issueCount} API issue${issueCount === 1 ? "" : "s"}` : "connected";
   els.warningBar.classList.toggle("hidden", issueCount === 0);
   if (issueCount) els.warningBar.textContent = `Some data could not be loaded (${issueCount} API ${issueCount === 1 ? "error" : "errors"}). Check that the token has write access to each listed dataset.`;
-
   const account = data.account;
   els.accountMini.innerHTML = `${account.avatarUrl ? `<img class="avatar" src="${escapeHtml(account.avatarUrl)}" alt="">` : `<span class="avatar avatar-fallback">${escapeHtml(initials(account.username))}</span>`}<div class="account-copy"><strong>${escapeHtml(account.username)}</strong><span>${data.namespaces.length} namespace${data.namespaces.length === 1 ? "" : "s"}</span></div>`;
+  const avatarImage = els.accountMini.querySelector("img.avatar");
+  avatarImage?.addEventListener("error", () => {
+    const fallback = document.createElement("span");
+    fallback.className = "avatar avatar-fallback";
+    fallback.textContent = initials(account.username);
+    avatarImage.replaceWith(fallback);
+  }, { once: true });
   els.datasetFilter.innerHTML = `<option value="all">All datasets</option>${data.datasets.map((dataset) => `<option value="${escapeHtml(dataset.id)}">${escapeHtml(dataset.id)}</option>`).join("")}`;
   els.dashboardContent.classList.remove("hidden");
+  els.setupPanel.classList.add("hidden");
   renderTable();
-}
-
-function showSetup(message) {
-  els.dashboardContent.classList.add("hidden");
-  els.setupPanel.classList.remove("hidden");
-  els.setupPanel.innerHTML = `<p class="eyebrow">One-time setup</p><h2>Connect your Hugging Face account</h2><p>${escapeHtml(message)}</p><ol><li>Copy <code>.env.example</code> to <code>.env</code>.</li><li>Set <code>HF_TOKEN</code> to a write-enabled user access token.</li><li>Restart the app, then refresh this page.</li></ol>`;
 }
 
 async function loadOverview(force = false) {
@@ -156,16 +148,13 @@ async function loadOverview(force = false) {
   els.refreshButton.classList.add("spinning");
   els.loadingState.classList.remove("hidden");
   try {
-    state.data = await api(`/api/overview${force ? "?refresh=1" : ""}`);
-    els.setupPanel.classList.add("hidden");
+    state.data = await window.hfDesk.getOverview(force);
     renderOverview();
   } catch (error) {
-    if (/HF_TOKEN is not configured/.test(error.message)) showSetup(error.message);
-    else {
-      els.loadingState.classList.add("hidden");
-      toast(error.message, "error");
-      if (!state.data) showSetup(error.message);
-    }
+    const message = friendlyError(error);
+    els.loadingState.classList.add("hidden");
+    toast(message, "error");
+    if (/No Hugging Face token/.test(message)) { state.hasToken = false; showSetup(false); }
   } finally {
     els.refreshButton.disabled = false;
     els.refreshButton.classList.remove("spinning");
@@ -177,16 +166,11 @@ function findRequests(ids) {
 }
 
 function openConfirm(action, requests) {
-  const labels = { accepted: "Approve", rejected: requests.some((r) => r.status === "accepted") ? "Revoke" : "Reject", pending: "Move", reset: "Reset" };
+  const labels = { accepted: "Approve", rejected: requests.some((request) => request.status === "accepted") ? "Revoke" : "Reject", pending: "Move", reset: "Reset" };
   const label = labels[action];
-  const count = requests.length;
   state.pendingAction = { action, requests };
-  els.confirmTitle.textContent = `${label} ${count === 1 ? "this request" : `${count} requests`}?`;
-  els.confirmMessage.textContent = action === "rejected"
-    ? "The selected users will not be able to access the corresponding datasets."
-    : action === "accepted" ? "The selected users will receive access to the corresponding datasets."
-    : action === "reset" ? "Users will need to agree to the terms and submit a new request."
-    : "The selected requests will return to the pending queue.";
+  els.confirmTitle.textContent = `${label} ${requests.length === 1 ? "this request" : `${requests.length} requests`}?`;
+  els.confirmMessage.textContent = action === "rejected" ? "The selected users will not be able to access the corresponding datasets." : action === "accepted" ? "The selected users will receive access to the corresponding datasets." : action === "reset" ? "Users will need to agree to the terms and submit a new request." : "The selected requests will return to the pending queue.";
   els.reasonWrap.classList.toggle("hidden", !["rejected", "reset"].includes(action));
   els.reasonInput.value = "";
   els.reasonCount.textContent = "0";
@@ -201,20 +185,17 @@ async function performAction() {
   if (!pending) return;
   els.confirmAction.disabled = true;
   try {
-    const result = await api("/api/requests/action", {
-      method: "POST",
-      body: JSON.stringify({
-        action: pending.action,
-        items: pending.requests.map(({ repoId, username }) => ({ repoId, username })),
-        reason: els.reasonInput.value.trim(),
-      }),
+    const result = await window.hfDesk.updateRequests({
+      action: pending.action,
+      items: pending.requests.map(({ repoId, username }) => ({ repoId, username })),
+      reason: els.reasonInput.value.trim(),
     });
     els.dialog.close();
     state.selected.clear();
-    toast(result.failed ? `${result.succeeded} succeeded; ${result.failed} failed.` : `${result.succeeded} request${result.succeeded === 1 ? "" : "s"} updated.` , result.failed ? "error" : "success");
+    toast(result.failed ? `${result.succeeded} succeeded; ${result.failed} failed.` : `${result.succeeded} request${result.succeeded === 1 ? "" : "s"} updated.`, result.failed ? "error" : "success");
     await loadOverview(true);
   } catch (error) {
-    toast(error.message, "error");
+    toast(friendlyError(error), "error");
   } finally {
     els.confirmAction.disabled = false;
     state.pendingAction = null;
@@ -222,10 +203,9 @@ async function performAction() {
 }
 
 function exportCsv() {
-  const rows = visibleRequests();
   const columns = ["status", "dataset", "username", "full name", "email", "requested at", "reviewed at", "custom fields"];
   const quote = (value) => `"${String(value ?? "").replaceAll('"', '""')}"`;
-  const csv = [columns, ...rows.map((r) => [r.status, r.repoId, r.username, r.fullname, r.email, r.requestedAt, r.reviewedAt, r.fields ? JSON.stringify(r.fields) : ""])].map((row) => row.map(quote).join(",")).join("\r\n");
+  const csv = [columns, ...visibleRequests().map((request) => [request.status, request.repoId, request.username, request.fullname, request.email, request.requestedAt, request.reviewedAt, request.fields ? JSON.stringify(request.fields) : ""])].map((row) => row.map(quote).join(",")).join("\r\n");
   const link = document.createElement("a");
   link.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
   link.download = `hf-access-requests-${state.status}-${new Date().toISOString().slice(0, 10)}.csv`;
@@ -233,18 +213,45 @@ function exportCsv() {
   URL.revokeObjectURL(link.href);
 }
 
-els.loginForm.addEventListener("submit", async (event) => {
+els.tokenForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  els.loginError.textContent = "";
+  els.tokenError.textContent = "";
+  els.saveTokenButton.disabled = true;
+  els.saveTokenButton.textContent = "Validating token…";
   try {
-    await api("/api/auth/login", { method: "POST", body: JSON.stringify({ password: els.password.value }) });
-    els.password.value = "";
+    const result = await window.hfDesk.saveCredential(els.tokenInput.value);
+    state.hasToken = true;
+    els.tokenInput.value = "";
     showApp();
-    await loadOverview();
-  } catch (error) { els.loginError.textContent = error.message; }
+    toast(`Connected as ${result.username}.`);
+    await loadOverview(true);
+  } catch (error) {
+    els.tokenError.textContent = friendlyError(error);
+  } finally {
+    els.saveTokenButton.disabled = false;
+    els.saveTokenButton.textContent = "Connect and save token";
+  }
 });
 
-els.logoutButton.addEventListener("click", async () => { await api("/api/auth/logout", { method: "POST", body: "{}" }); showLogin(); });
+els.toggleToken.addEventListener("click", () => {
+  const showing = els.tokenInput.type === "text";
+  els.tokenInput.type = showing ? "password" : "text";
+  els.toggleToken.textContent = showing ? "Show" : "Hide";
+  els.toggleToken.setAttribute("aria-label", showing ? "Show token" : "Hide token");
+});
+els.tokenHelp.addEventListener("click", () => window.hfDesk.openExternal("https://huggingface.co/settings/tokens"));
+els.changeTokenButton.addEventListener("click", () => showSetup(true));
+els.cancelTokenButton.addEventListener("click", () => { if (state.hasToken) showApp(); });
+els.forgetTokenButton.addEventListener("click", async () => {
+  if (!window.confirm("Forget the saved Hugging Face token on this computer?")) return;
+  try {
+    await window.hfDesk.forgetCredential();
+    state.hasToken = false;
+    state.data = null;
+    showSetup(false);
+  } catch (error) { els.tokenError.textContent = friendlyError(error); }
+});
+
 els.refreshButton.addEventListener("click", () => loadOverview(true));
 els.exportButton.addEventListener("click", exportCsv);
 els.searchInput.addEventListener("input", () => { state.query = els.searchInput.value; state.selected.clear(); renderTable(); });
@@ -260,9 +267,7 @@ $$('.nav-item').forEach((button) => button.addEventListener("click", () => {
 }));
 
 els.selectAll.addEventListener("change", () => {
-  for (const request of visibleRequests()) {
-    if (els.selectAll.checked) state.selected.add(request.id); else state.selected.delete(request.id);
-  }
+  for (const request of visibleRequests()) if (els.selectAll.checked) state.selected.add(request.id); else state.selected.delete(request.id);
   renderTable();
 });
 
@@ -274,6 +279,8 @@ els.requestRows.addEventListener("change", (event) => {
 });
 
 els.requestRows.addEventListener("click", (event) => {
+  const link = event.target.closest(".repo-link");
+  if (link) { event.preventDefault(); window.hfDesk.openExternal(link.href); return; }
   const button = event.target.closest("[data-action]");
   if (!button) return;
   const request = state.data.requests.find((item) => item.id === button.dataset.id);
@@ -286,22 +293,25 @@ els.bulkBar.addEventListener("click", (event) => {
 });
 
 els.confirmForm.addEventListener("submit", (event) => {
-  const submitter = event.submitter?.value;
-  if (submitter !== "confirm") { state.pendingAction = null; return; }
+  if (event.submitter?.value !== "confirm") { state.pendingAction = null; return; }
   event.preventDefault();
   performAction();
 });
 
 async function start() {
+  if (!window.hfDesk) {
+    els.tokenError.textContent = "Launch this project with Electron; it no longer runs in a web browser.";
+    return showSetup(false);
+  }
   try {
-    const auth = await api("/api/auth/status");
-    state.authRequired = auth.required;
-    if (!auth.authenticated) return showLogin();
+    const credential = await window.hfDesk.getCredentialStatus();
+    state.hasToken = credential.hasToken;
+    if (!state.hasToken) return showSetup(false);
     showApp();
     await loadOverview();
   } catch (error) {
-    showApp();
-    showSetup(error.message);
+    showSetup(false);
+    els.tokenError.textContent = friendlyError(error);
   }
 }
 

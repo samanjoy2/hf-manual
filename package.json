@@ -2,14 +2,60 @@
   "name": "hf-access-desk",
   "version": "1.0.0",
   "private": true,
-  "description": "A private dashboard for managing gated Hugging Face dataset access requests.",
-  "type": "module",
+  "description": "A secure Electron desktop app for managing gated Hugging Face dataset access requests.",
+  "main": "electron/main.cjs",
+  "author": "samanjoy2",
+  "homepage": "https://github.com/samanjoy2/hf-manual",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/samanjoy2/hf-manual.git"
+  },
   "scripts": {
-    "start": "node server.mjs",
-    "dev": "node --watch server.mjs",
-    "check": "node --check server.mjs && node --check public/app.js"
+    "start": "electron .",
+    "dev": "electron .",
+    "check": "node --check electron/main.cjs && node --check electron/preload.cjs && node --check public/app.js",
+    "build:icon": "python scripts/generate_icon.py",
+    "dist:win": "npm run build:icon && electron-builder --win nsis --x64"
   },
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "electron": "^44.4.5",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.samanjoy.hfaccessdesk",
+    "productName": "HF Access Desk",
+    "asar": true,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron/**/*",
+      "public/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "HF-Access-Desk-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "HF Access Desk",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false
+    }
   }
 }

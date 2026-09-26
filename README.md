@@ -1,80 +1,71 @@
 # HF Access Desk
 
-A small, private dashboard for reviewing access requests across all of your gated Hugging Face datasets. It uses the official Hugging Face Hub access-request API and keeps the Hugging Face token on the server.
+A private Windows desktop app for reviewing and managing access requests across all of your gated Hugging Face datasets.
 
-## What it does
+## Features
 
-- Discovers gated datasets under your account and writable organizations.
-- Combines pending, accepted, and rejected requests into one dashboard.
-- Filters by status or dataset and searches names, usernames, and email addresses.
-- Approves, rejects, revokes, resets, or moves requests back to pending.
-- Supports bulk approve/reject and CSV export.
-- Protects a deployed dashboard with an optional password.
-- Runs with Node.js only—there are no npm dependencies to install.
+- Native Electron window—no localhost server or browser tab.
+- First-launch token setup with live Hugging Face validation.
+- Token encryption through Electron `safeStorage` and Windows DPAPI.
+- Automatic discovery of gated datasets in your personal and writable organization namespaces.
+- Combined pending, accepted, and rejected request views.
+- Search, dataset filters, bulk approval/rejection, and CSV export.
+- Revoke, reset, or return existing decisions to pending.
 
-## Run locally
+## Install and run
 
-1. Copy `.env.example` to `.env`.
-2. Put a Hugging Face user access token with gated-request read and repository write permissions in `HF_TOKEN`.
-3. Set a strong `APP_PASSWORD` if anyone else can reach the server.
-4. Start the app:
+Install the Electron dependency once:
 
-   ```sh
-   node server.mjs
-   ```
-
-5. Open [http://localhost:7860](http://localhost:7860).
-
-The `.env` file is ignored by Git. Do not put your token in the source files or commit it.
-
-## Dataset discovery
-
-The dashboard calls `whoami-v2`, searches for gated datasets under your personal namespace and organizations where you have a writable role, then queries each dataset's access-request endpoints.
-
-If a private or resource-group dataset is not discovered automatically, add it explicitly:
-
-```dotenv
-HF_DATASETS=your-name/dataset-one,your-org/dataset-two
+```powershell
+npm install
 ```
 
-The token must have write access to every repository whose requests you want to change. API failures on individual datasets are shown as a warning without hiding requests from other datasets.
+Then launch the app with either:
 
-## Deploy as a Hugging Face Docker Space
-
-1. Create a new **Docker** Space. A private Space is strongly recommended because access requests contain personal information.
-2. Upload this repository.
-3. In the Space settings, add `HF_TOKEN` as a **Secret**—not a variable.
-4. Add `APP_PASSWORD` as another Secret if the Space is reachable by anyone else.
-5. Optionally add `HF_DATASETS` as a variable with comma-separated dataset IDs.
-
-The included `Dockerfile` listens on port `7860`, which is the default port for Docker Spaces.
-
-## Security notes
-
-- `HF_TOKEN` is never sent to the browser.
-- `APP_PASSWORD` creates an HTTP-only, same-site session cookie and is rate-limited on repeated failures.
-- For public deployments, HTTPS is required for the production session cookie.
-- Prefer a narrowly scoped Hugging Face token. Rotate any token that was shared in chat, logs, screenshots, or source control.
-- Access-request records include personal data such as email addresses. Keep the dashboard private and handle exports accordingly.
-
-## Configuration
-
-| Variable | Required | Default | Purpose |
-| --- | --- | --- | --- |
-| `HF_TOKEN` | Yes | — | Hugging Face user access token |
-| `APP_PASSWORD` | Recommended | No login required | Protects the dashboard |
-| `HF_DATASETS` | No | Auto-discovery | Extra comma-separated dataset IDs |
-| `PORT` | No | `7860` | Server port |
-| `HOST` | No | `0.0.0.0` | Bind address; use `127.0.0.1` for local-only access |
-| `HF_ENDPOINT` | No | `https://huggingface.co` | Hub endpoint |
-| `CACHE_TTL_SECONDS` | No | `60` | Dashboard cache duration |
-
-## API behavior
-
-Approvals and rejections use:
-
-```text
-POST /api/datasets/{repo_id}/user-access-request/handle
+```powershell
+npm start
 ```
 
-with the status and username in the JSON body. A batch is processed with limited concurrency, and partial failures are reported rather than silently discarded.
+or double-click **HF Access Desk** on the Windows desktop.
+
+## Download the Windows installer
+
+Download `HF-Access-Desk-Setup-1.0.0.exe` from the repository's **Releases** page. Run the installer, choose an installation folder, and use the desktop or Start Menu shortcut it creates.
+
+The initial community build is not code-signed, so Windows SmartScreen may show an **Unknown publisher** warning. The installer hash is published in the release notes for verification.
+
+## First launch
+
+The app asks you to paste a Hugging Face user access token. The token needs permission to:
+
+- view access requests for gated repositories;
+- write to every dataset whose requests you want to manage.
+
+The app validates the token before saving it. On Windows, Electron encrypts it with DPAPI through `safeStorage`, meaning it is tied to your Windows sign-in. The encrypted value is stored in Electron's per-user application-data directory—not in this repository.
+
+Use **Change token** at the bottom-left of the app to replace or forget the saved credential.
+
+## Security design
+
+- The renderer has Node.js integration disabled.
+- Context isolation and Chromium renderer sandboxing are enabled.
+- The preload bridge exposes only six narrow app functions, never raw Electron IPC.
+- The renderer cannot make network requests; Hugging Face calls run in the main process.
+- Navigation, new windows, and browser permissions are denied by default.
+- External links are restricted to Hugging Face dataset pages and token settings.
+- The token is never returned to the renderer after it is saved.
+
+## Development
+
+```powershell
+npm run check
+npm run dev
+```
+
+Create a Windows installer locally with:
+
+```powershell
+npm run dist:win
+```
+
+Main-process code is in `electron/main.cjs`, the isolated bridge is in `electron/preload.cjs`, and the interface is in `public/`.

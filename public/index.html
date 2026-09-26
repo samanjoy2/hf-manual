@@ -5,32 +5,44 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light" />
     <meta name="theme-color" content="#f6f3ec" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https://huggingface.co https://cdn-avatars.huggingface.co; style-src 'self'; script-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; object-src 'none'" />
     <title>HF Access Desk</title>
     <meta name="description" content="Review gated Hugging Face dataset access requests in one place." />
-    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <div id="loginView" class="login-view hidden">
-      <main class="login-card">
-        <div class="brand-mark" aria-hidden="true">HF</div>
-        <p class="eyebrow">Private workspace</p>
-        <h1>Access Desk</h1>
-        <p class="muted">Enter the dashboard password to review your dataset requests.</p>
-        <form id="loginForm">
-          <label for="password">Dashboard password</label>
-          <input id="password" name="password" type="password" autocomplete="current-password" required />
-          <p id="loginError" class="form-error" role="alert"></p>
-          <button class="button primary wide" type="submit">Open dashboard</button>
+    <div id="setupView" class="login-view hidden">
+      <main class="login-card setup-card">
+        <div class="setup-heading">
+          <div class="brand-mark" aria-hidden="true">HF</div>
+          <div><p class="eyebrow">Welcome to</p><h1>Access Desk</h1></div>
+        </div>
+        <p class="setup-lede">Manage every gated dataset request from one private desktop workspace.</p>
+        <div class="security-note">
+          <span class="security-icon">◆</span>
+          <div><strong>Stored securely on this PC</strong><p>Your token is encrypted with Windows protected storage. It never appears in the interface again or enters the project files.</p></div>
+        </div>
+        <form id="tokenForm">
+          <div class="label-row"><label for="tokenInput">Hugging Face token</label><button id="tokenHelp" class="inline-link" type="button">Create a token ↗</button></div>
+          <div class="token-field">
+            <input id="tokenInput" name="token" type="password" autocomplete="off" spellcheck="false" placeholder="hf_••••••••••••••••••••" required />
+            <button id="toggleToken" type="button" aria-label="Show token">Show</button>
+          </div>
+          <p class="field-help">Use a user access token that can view gated requests and write to the datasets you manage.</p>
+          <p id="tokenError" class="form-error" role="alert"></p>
+          <button id="saveTokenButton" class="button primary wide" type="submit">Connect and save token</button>
+          <button id="cancelTokenButton" class="button secondary wide hidden" type="button">Back to dashboard</button>
+          <button id="forgetTokenButton" class="forget-button hidden" type="button">Forget the saved token</button>
         </form>
       </main>
     </div>
 
     <div id="appView" class="app-shell hidden">
       <aside class="sidebar">
-        <a class="brand" href="/" aria-label="HF Access Desk home">
+        <div class="brand" aria-label="HF Access Desk home">
           <span class="brand-mark small">HF</span>
           <span>Access Desk</span>
-        </a>
+        </div>
         <nav aria-label="Request status">
           <button class="nav-item active" data-status="pending">
             <span class="nav-icon amber">●</span><span>Pending</span><span id="navPending" class="nav-count">0</span>
@@ -47,7 +59,7 @@
         </nav>
         <div class="sidebar-foot">
           <div id="accountMini" class="account-mini"></div>
-          <button id="logoutButton" class="text-button hidden">Sign out</button>
+          <button id="changeTokenButton" class="text-button">Change token</button>
         </div>
       </aside>
 
@@ -147,6 +159,6 @@
     </dialog>
 
     <div id="toastRegion" class="toast-region" aria-live="polite"></div>
-    <script type="module" src="/app.js"></script>
+    <script type="module" src="./app.js"></script>
   </body>
 </html>
