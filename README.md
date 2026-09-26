@@ -9,8 +9,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/samanjoy2/hf-manual/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/samanjoy2/hf-manual?style=flat-square&color=1f4d3b" /></a>
-  <a href="https://github.com/samanjoy2/hf-manual/releases"><img alt="Release downloads" src="https://img.shields.io/github/downloads/samanjoy2/hf-manual/total?style=flat-square&color=d89520" /></a>
+  <a href="https://github.com/samanjoy2/hf-manual/releases/tag/v1.0.1"><img alt="Release v1.0.1" src="https://img.shields.io/badge/release-v1.0.1-1f4d3b?style=flat-square" /></a>
+  <a href="https://github.com/samanjoy2/hf-manual/releases/tag/v1.0.1"><img alt="Download Windows installer" src="https://img.shields.io/badge/download-Windows_x64-d89520?style=flat-square&logo=github" /></a>
   <img alt="Windows" src="https://img.shields.io/badge/Windows-10%2B-1f4d3b?style=flat-square&logo=windows" />
   <img alt="Electron" src="https://img.shields.io/badge/Electron-desktop-1f4d3b?style=flat-square&logo=electron" />
 </p>
