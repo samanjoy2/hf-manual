@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Added the custom dataset-shield application icon throughout the desktop interface and Windows build.
+- Rebuilt the project README with release links, screenshots, security details, and source-build instructions.
+- Added reproducible, privacy-safe screenshots generated entirely from fictional demo data.
+
 ## 1.0.0 — 2026-09-26
 
 First public Windows release of HF Access Desk.

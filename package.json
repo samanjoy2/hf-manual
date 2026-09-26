@@ -15,6 +15,7 @@
     "dev": "electron .",
     "check": "node --check electron/main.cjs && node --check electron/preload.cjs && node --check public/app.js",
     "build:icon": "python scripts/generate_icon.py",
+    "screenshots": "node scripts/capture_screenshots.cjs",
     "dist:win": "npm run build:icon && electron-builder --win nsis --x64"
   },
   "engines": {
@@ -45,7 +46,7 @@
           ]
         }
       ],
-      "icon": "build/icon.ico",
+      "icon": "build/app-icon-v2.ico",
       "artifactName": "HF-Access-Desk-Setup-${version}.${ext}"
     },
     "nsis": {
