@@ -45,6 +45,8 @@
     cached: false,
   };
 
+  let preferences = { refreshMinutes: 5, notifications: true, checkUpdates: true };
+  const updateStatus = { status: "current", currentVersion: "1.2.0", message: "Version 1.2.0 is up to date." };
   window.hfDesk = Object.freeze({
     getCredentialStatus: async () => ({ hasToken: demoView !== "setup" }),
     saveCredential: async () => ({ saved: true, username: "Demo Workspace" }),
@@ -52,6 +54,16 @@
     getOverview: async () => overview,
     updateRequests: async ({ items = [] }) => ({ results: [], succeeded: items.length, failed: 0 }),
     getAuditLog: async () => auditLog,
+    getSettings: async () => preferences,
+    saveSettings: async (value) => (preferences = value),
+    getUpdateStatus: async () => updateStatus,
+    checkUpdates: async () => updateStatus,
+    downloadUpdate: async () => updateStatus,
+    installUpdate: async () => true,
+    onOverview: () => () => {},
+    onRefreshError: () => () => {},
+    onOpenPending: () => () => {},
+    onUpdateStatus: () => () => {},
     openExternal: async () => true,
   });
 })();

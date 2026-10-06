@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.0 — 2026-10-07
+
+- Added automatic request refresh with configurable 1-, 5-, 15-, or 30-minute intervals.
+- Added Windows notifications for newly detected pending requests, with an encrypted baseline to avoid duplicate alerts.
+- Added automatic GitHub update checks, download progress, checksum verification, and an install-and-restart action.
+- Added Settings & updates, available from both the dashboard and token setup.
+- Replaced sidebar dots with distinct clock, checkmark, cross, and list icons, plus hover labels.
+- Preserved the selected dataset filter during refresh and prevented multiple app instances from polling simultaneously.
+
 ## 1.1.0 — 2026-10-06
 
 - Added a request-details drawer with submitted form answers and direct dataset, profile, and email links.

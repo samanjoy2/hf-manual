@@ -9,6 +9,7 @@ const state = {
   selected: new Set(),
   pendingAction: null,
   hasToken: false,
+  update: null,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -26,6 +27,8 @@ const els = {
   reasonWrap: $("#reasonWrap"), reasonInput: $("#reasonInput"), reasonCount: $("#reasonCount"), toastRegion: $("#toastRegion"),
   detailsDialog: $("#detailsDialog"), detailsTitle: $("#detailsTitle"), detailsBody: $("#detailsBody"), closeDetailsButton: $("#closeDetailsButton"),
   auditDialog: $("#auditDialog"), auditRows: $("#auditRows"), auditEmpty: $("#auditEmpty"), closeAuditButton: $("#closeAuditButton"), exportAuditCsvButton: $("#exportAuditCsvButton"), exportAuditJsonButton: $("#exportAuditJsonButton"),
+  settingsDialog: $("#settingsDialog"), settingsButton: $("#settingsButton"), setupSettingsButton: $("#setupSettingsButton"), closeSettingsButton: $("#closeSettingsButton"), settingsForm: $("#settingsForm"), refreshInterval: $("#refreshInterval"), notificationsToggle: $("#notificationsToggle"), updatesToggle: $("#updatesToggle"), settingsSaved: $("#settingsSaved"),
+  checkUpdateButton: $("#checkUpdateButton"), downloadUpdateButton: $("#downloadUpdateButton"), installUpdateButton: $("#installUpdateButton"), installedVersion: $("#installedVersion"), updateStatusText: $("#updateStatusText"), updateProgress: $("#updateProgress"), updateBanner: $("#updateBanner"), updateBannerText: $("#updateBannerText"), updateBannerButton: $("#updateBannerButton"),
 };
 
 function setSidebarCollapsed(collapsed, persist = true) {
@@ -187,7 +190,9 @@ function renderOverview() {
     fallback.textContent = initials(account.username);
     avatarImage.replaceWith(fallback);
   }, { once: true });
+  if (!data.datasets.some((dataset) => dataset.id === state.dataset)) state.dataset = "all";
   els.datasetFilter.innerHTML = `<option value="all">All datasets</option>${data.datasets.map((dataset) => `<option value="${escapeHtml(dataset.id)}">${escapeHtml(dataset.id)}</option>`).join("")}`;
+  els.datasetFilter.value = state.dataset;
   els.dashboardContent.classList.remove("hidden");
   els.setupPanel.classList.add("hidden");
   renderTable();
@@ -469,12 +474,84 @@ els.confirmForm.addEventListener("submit", (event) => {
   performAction();
 });
 
+function renderUpdateStatus(update) {
+  state.update = update;
+  els.installedVersion.textContent = `Installed version ${update.currentVersion}`;
+  els.updateStatusText.textContent = update.message;
+  const busy = ["checking", "downloading", "installing"].includes(update.status);
+  els.checkUpdateButton.disabled = busy;
+  els.downloadUpdateButton.classList.toggle("hidden", update.status !== "available" || !update.canInstall);
+  els.installUpdateButton.classList.toggle("hidden", update.status !== "downloaded");
+  els.updateProgress.classList.toggle("hidden", update.status !== "downloading");
+  els.updateProgress.value = update.progress || 0;
+  els.updateBanner.classList.toggle("hidden", !["available", "downloading", "downloaded"].includes(update.status));
+  els.updateBannerText.textContent = update.message;
+}
+
+async function openSettings() {
+  try {
+    const preferences = await window.hfDesk.getSettings();
+    els.refreshInterval.value = String(preferences.refreshMinutes);
+    els.notificationsToggle.checked = preferences.notifications;
+    els.updatesToggle.checked = preferences.checkUpdates;
+    els.settingsSaved.textContent = "";
+    renderUpdateStatus(await window.hfDesk.getUpdateStatus());
+    els.settingsDialog.showModal();
+  } catch (error) { toast(friendlyError(error), "error"); }
+}
+
+els.settingsButton.addEventListener("click", openSettings);
+els.setupSettingsButton.addEventListener("click", openSettings);
+els.updateBannerButton.addEventListener("click", openSettings);
+els.closeSettingsButton.addEventListener("click", () => els.settingsDialog.close());
+els.settingsForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const button = event.submitter;
+  button.disabled = true;
+  try {
+    await window.hfDesk.saveSettings({ refreshMinutes: Number(els.refreshInterval.value), notifications: els.notificationsToggle.checked, checkUpdates: els.updatesToggle.checked });
+    els.settingsSaved.textContent = "Preferences saved";
+  } catch (error) { toast(friendlyError(error), "error"); }
+  finally { button.disabled = false; }
+});
+els.checkUpdateButton.addEventListener("click", async () => {
+  try { renderUpdateStatus(await window.hfDesk.checkUpdates()); }
+  catch (error) { toast(friendlyError(error), "error"); }
+});
+els.downloadUpdateButton.addEventListener("click", async () => {
+  try { renderUpdateStatus(await window.hfDesk.downloadUpdate()); }
+  catch (error) { toast(friendlyError(error), "error"); }
+});
+els.installUpdateButton.addEventListener("click", async () => {
+  els.installUpdateButton.disabled = true;
+  try { await window.hfDesk.installUpdate(); }
+  catch (error) {
+    toast(friendlyError(error), "error");
+    renderUpdateStatus(await window.hfDesk.getUpdateStatus());
+    els.installUpdateButton.disabled = false;
+  }
+});
+
 async function start() {
   if (!window.hfDesk) {
     els.tokenError.textContent = "Launch this project with Electron; it no longer runs in a web browser.";
     return showSetup(false);
   }
   try {
+    window.hfDesk.onUpdateStatus(renderUpdateStatus);
+    window.hfDesk.onOverview((overview) => {
+      if (!state.hasToken) return;
+      state.data = overview;
+      const ids = new Set(overview.requests.map((request) => request.id));
+      state.selected = new Set([...state.selected].filter((id) => ids.has(id)));
+      renderOverview();
+    });
+    window.hfDesk.onRefreshError((message) => {
+      if (!state.hasToken) return;
+      els.lastUpdated.textContent = message;
+    });
+    window.hfDesk.onOpenPending(() => document.querySelector('.nav-item[data-status="pending"]').click());
+    renderUpdateStatus(await window.hfDesk.getUpdateStatus());
     const credential = await window.hfDesk.getCredentialStatus();
     state.hasToken = credential.hasToken;
     if (!state.hasToken) return showSetup(false);
@@ -489,6 +566,7 @@ async function start() {
         renderAuditLog();
         els.auditDialog.showModal();
       }
+      if (demoParams.get("settings") === "1") await openSettings();
     }
   } catch (error) {
     showSetup(false);

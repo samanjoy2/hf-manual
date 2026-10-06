@@ -1,8 +1,11 @@
-const { app, BrowserWindow, ipcMain, safeStorage, shell, session } = require("electron");
+const { app, BrowserWindow, ipcMain, safeStorage, shell, session, Notification } = require("electron");
+const { spawn } = require("node:child_process");
 const { mkdir, readFile, rename, unlink, writeFile } = require("node:fs/promises");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { allowedExternalUrl } = require("./external-links.cjs");
+const { observeRequests } = require("./request-monitor.cjs");
+const { UpdateService } = require("./updates.cjs");
 
 const HF_ENDPOINT = "https://huggingface.co";
 const CACHE_TTL_MS = 60_000;
@@ -13,6 +16,96 @@ const TRUSTED_RENDERER = pathToFileURL(INDEX_FILE).href;
 let mainWindow = null;
 let overviewCache = null;
 let tokenCache = null;
+let credentialGeneration = 0;
+let overviewInFlight = null;
+let settings = { refreshMinutes: 5, notifications: true, checkUpdates: true };
+let refreshTimer;
+let updateTimer;
+let updateService;
+let requestSnapshot = null;
+let snapshotLoaded = false;
+const activeNotifications = new Set();
+
+function sendToRenderer(channel, value) {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, value);
+}
+
+function normalizeSettings(value) {
+  return {
+    refreshMinutes: [0, 1, 5, 15, 30].includes(value?.refreshMinutes) ? value.refreshMinutes : 5,
+    notifications: typeof value?.notifications === "boolean" ? value.notifications : true,
+    checkUpdates: typeof value?.checkUpdates === "boolean" ? value.checkUpdates : true,
+  };
+}
+
+async function loadSettings() {
+  try { settings = normalizeSettings(JSON.parse(await readFile(path.join(app.getPath("userData"), "settings.json"), "utf8"))); }
+  catch { /* First run uses the defaults. */ }
+}
+
+function showRequestNotification(count) {
+  if (!settings.notifications || !Notification.isSupported()) return;
+  const notification = new Notification({
+    title: `${count} new dataset access request${count === 1 ? "" : "s"}`,
+    body: "Open HF Access Desk to review your pending requests.",
+    icon: path.join(PUBLIC_DIR, "app-icon.png"),
+  });
+  activeNotifications.add(notification);
+  notification.on("click", () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+    sendToRenderer("monitor:open-pending", {});
+  });
+  notification.on("close", () => activeNotifications.delete(notification));
+  notification.on("failed", () => activeNotifications.delete(notification));
+  notification.show();
+}
+
+async function observeOverview(overview, generation) {
+  if (!snapshotLoaded) {
+    try {
+      const encrypted = await readFile(path.join(app.getPath("userData"), "request-snapshot.bin"));
+      const snapshot = JSON.parse(await decryptText(encrypted));
+      if (typeof snapshot.account === "string" && Array.isArray(snapshot.keys)) requestSnapshot = snapshot;
+    } catch { /* Establish a baseline without alerting on existing requests. */ }
+    snapshotLoaded = true;
+  }
+  if (generation !== credentialGeneration) return;
+  // Do not establish or change the baseline using an incomplete API response.
+  if (overview.discoveryErrors.length || overview.datasets.some((dataset) => dataset.errors.length)) return;
+  const observed = observeRequests(requestSnapshot, overview);
+  requestSnapshot = observed.snapshot;
+  const encrypted = await encryptText(JSON.stringify(requestSnapshot));
+  if (generation !== credentialGeneration) return;
+  const file = path.join(app.getPath("userData"), "request-snapshot.bin");
+  await mkdir(path.dirname(file), { recursive: true });
+  await writeFile(`${file}.tmp`, encrypted, { mode: 0o600 });
+  await rename(`${file}.tmp`, file);
+  if (observed.added.length) showRequestNotification(observed.added.length);
+}
+
+function scheduleBackgroundWork() {
+  clearInterval(refreshTimer);
+  clearInterval(updateTimer);
+  if (settings.refreshMinutes) {
+    refreshTimer = setInterval(async () => {
+      try {
+        if (!(await loadToken())) return;
+        const overview = await getOverview(true);
+        sendToRenderer("monitor:overview", overview);
+      } catch { sendToRenderer("monitor:error", "Automatic refresh failed. The app will retry at the next interval."); }
+    }, settings.refreshMinutes * 60_000);
+  }
+  if (settings.checkUpdates) updateTimer = setInterval(() => updateService.check(), 6 * 60 * 60_000);
+}
+
+function getOverview(force = false) {
+  if (overviewInFlight) return overviewInFlight;
+  overviewInFlight = buildOverview(force).finally(() => { overviewInFlight = null; });
+  return overviewInFlight;
+}
 
 function credentialPath() {
   return path.join(app.getPath("userData"), "credential.json");
@@ -60,10 +153,12 @@ async function saveToken(token) {
   await writeFile(temporary, JSON.stringify({ version: 1, encrypted: encrypted.toString("base64") }), { mode: 0o600 });
   await rename(temporary, file);
   tokenCache = token;
+  credentialGeneration++;
   overviewCache = null;
 }
 
 async function forgetToken() {
+  credentialGeneration++;
   tokenCache = null;
   overviewCache = null;
   try { await unlink(credentialPath()); } catch (error) { if (error.code !== "ENOENT") throw error; }
@@ -266,6 +361,7 @@ async function getDatasetRequests(dataset, token) {
 }
 
 async function buildOverview(force = false) {
+  const generation = credentialGeneration;
   const token = await loadToken();
   if (!token) throw new Error("No Hugging Face token is saved.");
   if (!force && overviewCache && Date.now() - overviewCache.createdAt < CACHE_TTL_MS) return { ...overviewCache.value, cached: true };
@@ -284,7 +380,9 @@ async function buildOverview(force = false) {
     fetchedAt: new Date().toISOString(),
     cached: false,
   };
+  if (generation !== credentialGeneration) throw new Error("The saved token changed. Refresh to load the new account.");
   overviewCache = { createdAt: Date.now(), value };
+  try { await observeOverview(value, generation); } catch { /* A snapshot failure must not block the review queue. */ }
   return value;
 }
 
@@ -348,9 +446,36 @@ function registerIpc() {
     return { saved: true, username };
   });
   ipcMain.handle("credential:forget", async (event) => { assertTrusted(event); await forgetToken(); return { forgotten: true }; });
-  ipcMain.handle("hub:overview", async (event, force) => { assertTrusted(event); return buildOverview(Boolean(force)); });
+  ipcMain.handle("hub:overview", async (event, force) => { assertTrusted(event); return getOverview(Boolean(force)); });
   ipcMain.handle("hub:update-requests", async (event, body) => { assertTrusted(event); return updateRequests(body); });
   ipcMain.handle("audit:list", async (event) => { assertTrusted(event); return loadAuditLog(); });
+  ipcMain.handle("settings:get", (event) => { assertTrusted(event); return settings; });
+  ipcMain.handle("settings:save", async (event, value) => {
+    assertTrusted(event);
+    const next = normalizeSettings(value);
+    const file = path.join(app.getPath("userData"), "settings.json");
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(`${file}.tmp`, JSON.stringify(next));
+    await rename(`${file}.tmp`, file);
+    settings = next;
+    scheduleBackgroundWork();
+    return settings;
+  });
+  ipcMain.handle("updates:status", (event) => { assertTrusted(event); return updateService.state; });
+  ipcMain.handle("updates:check", (event) => { assertTrusted(event); return updateService.check(); });
+  ipcMain.handle("updates:download", (event) => { assertTrusted(event); return updateService.download(); });
+  ipcMain.handle("updates:install", async (event) => {
+    assertTrusted(event);
+    const installer = await updateService.prepareInstall();
+    await new Promise((resolve, reject) => {
+      const child = spawn(installer, [], { detached: true, stdio: "ignore", windowsHide: false });
+      child.once("error", reject);
+      child.once("spawn", () => { child.unref(); resolve(); });
+    });
+    updateService.setState({ status: "installing", message: "Opening the update installer…" });
+    setTimeout(() => app.quit(), 300);
+    return true;
+  });
   ipcMain.handle("app:open-external", async (event, url) => {
     assertTrusted(event);
     if (!allowedExternalUrl(url)) throw new Error("This link is not allowed.");
@@ -386,11 +511,33 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(() => {
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+app.on("second-instance", () => {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+});
+
+app.whenReady().then(async () => {
+  app.setAppUserModelId("com.samanjoy.hfaccessdesk");
+  await loadSettings();
+  updateService = new UpdateService({
+    version: app.getVersion(),
+    directory: path.join(app.getPath("userData"), "updates"),
+    enabled: app.isPackaged && process.platform === "win32",
+    emit: (state) => sendToRenderer("updates:changed", state),
+  });
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
   registerIpc();
   createWindow();
+  scheduleBackgroundWork();
+  if (settings.checkUpdates) updateService.check();
   app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
 
 app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });
+app.on("before-quit", () => { clearInterval(refreshTimer); clearInterval(updateTimer); });
+}

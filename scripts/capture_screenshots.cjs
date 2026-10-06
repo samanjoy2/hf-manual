@@ -45,6 +45,7 @@ async function capture(name, query, profileRoot) {
     await capture("sidebar-collapsed", "demo=dashboard&sidebar=collapsed", profileRoot);
     await capture("request-details", "demo=dashboard&details=pending-01", profileRoot);
     await capture("audit-log", "demo=dashboard&audit=1", profileRoot);
+    await capture("settings-updates", "demo=dashboard&settings=1", profileRoot);
   } finally {
     await rm(profileRoot, { recursive: true, force: true });
   }

@@ -33,6 +33,7 @@
           <button id="saveTokenButton" class="button primary wide" type="submit">Connect and save token</button>
           <button id="cancelTokenButton" class="button secondary wide hidden" type="button">Back to dashboard</button>
           <button id="forgetTokenButton" class="forget-button hidden" type="button">Forget the saved token</button>
+          <button id="setupSettingsButton" class="forget-button settings-link" type="button">Settings &amp; updates</button>
         </form>
       </main>
     </div>
@@ -49,17 +50,17 @@
           </button>
         </div>
         <nav aria-label="Request status">
-          <button class="nav-item active" data-status="pending">
-            <span class="nav-icon amber">●</span><span>Pending</span><span id="navPending" class="nav-count">0</span>
+          <button class="nav-item active" data-status="pending" title="Pending requests" aria-label="Pending requests">
+            <span class="nav-icon amber" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><span>Pending</span><span id="navPending" class="nav-count">0</span>
           </button>
-          <button class="nav-item" data-status="accepted">
-            <span class="nav-icon green">●</span><span>Accepted</span><span id="navAccepted" class="nav-count">0</span>
+          <button class="nav-item" data-status="accepted" title="Accepted requests" aria-label="Accepted requests">
+            <span class="nav-icon green" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></svg></span><span>Accepted</span><span id="navAccepted" class="nav-count">0</span>
           </button>
-          <button class="nav-item" data-status="rejected">
-            <span class="nav-icon red">●</span><span>Rejected</span><span id="navRejected" class="nav-count">0</span>
+          <button class="nav-item" data-status="rejected" title="Rejected requests" aria-label="Rejected requests">
+            <span class="nav-icon red" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m9 9 6 6m0-6-6 6"/></svg></span><span>Rejected</span><span id="navRejected" class="nav-count">0</span>
           </button>
-          <button class="nav-item" data-status="all">
-            <span class="nav-icon ink">●</span><span>All requests</span><span id="navAll" class="nav-count">0</span>
+          <button class="nav-item" data-status="all" title="All requests" aria-label="All requests">
+            <span class="nav-icon ink" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M8 8h9M8 12h9M8 16h9M6 8h.01M6 12h.01M6 16h.01"/></svg></span><span>All requests</span><span id="navAll" class="nav-count">0</span>
           </button>
         </nav>
         <div class="sidebar-foot">
@@ -76,12 +77,15 @@
           </div>
           <div class="topbar-actions">
             <span id="lastUpdated" class="last-updated"></span>
+            <button id="settingsButton" class="icon-button" type="button" title="Settings and updates" aria-label="Settings and updates"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg></button>
             <button id="auditButton" class="button secondary compact-button" type="button">Audit log</button>
             <button id="refreshButton" class="icon-button" title="Refresh from Hugging Face" aria-label="Refresh from Hugging Face">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6v5h-5M4 18v-5h5M18.5 9A7 7 0 0 0 6.2 6.2L4 8m16 8-2.2 1.8A7 7 0 0 1 5.5 15"/></svg>
             </button>
           </div>
         </header>
+
+        <div id="updateBanner" class="update-banner hidden" role="status"><span id="updateBannerText"></span><button id="updateBannerButton" class="button secondary small-action" type="button">View update</button></div>
 
         <section id="setupPanel" class="setup-panel hidden" aria-live="polite"></section>
 
@@ -210,6 +214,34 @@
           </table>
           <div id="auditEmpty" class="empty-state hidden"><div class="empty-icon">✓</div><h2>No decisions recorded</h2><p>Successful actions taken in this app will appear here.</p></div>
         </div>
+      </div>
+    </dialog>
+
+    <dialog id="settingsDialog" class="settings-dialog" aria-labelledby="settingsTitle">
+      <div class="settings-shell">
+        <button id="closeSettingsButton" class="dialog-close" type="button" aria-label="Close settings">×</button>
+        <p class="eyebrow">Make it yours</p><h2 id="settingsTitle">Settings &amp; updates</h2>
+        <form id="settingsForm">
+          <section class="settings-section">
+            <h3>Request monitoring</h3>
+            <label class="settings-row" for="refreshInterval"><span>Refresh requests automatically</span><select id="refreshInterval"><option value="0">Off</option><option value="1">Every minute</option><option value="5">Every 5 minutes</option><option value="15">Every 15 minutes</option><option value="30">Every 30 minutes</option></select></label>
+            <label class="settings-row" for="notificationsToggle"><span>Notify me about new pending requests</span><input id="notificationsToggle" type="checkbox" /></label>
+            <p class="field-help">Monitoring runs while the app is open, including when minimized. Notifications show a count, without names or email addresses. Windows notification settings control delivery.</p>
+          </section>
+          <section class="settings-section">
+            <h3>App updates</h3>
+            <label class="settings-row" for="updatesToggle"><span>Check for updates automatically</span><input id="updatesToggle" type="checkbox" /></label>
+            <p class="field-help">Checks GitHub at startup and every 6 hours. You choose when to download and install an update.</p>
+          </section>
+          <div class="settings-save"><span id="settingsSaved" role="status"></span><button class="button primary" type="submit">Save preferences</button></div>
+        </form>
+        <section class="settings-section update-section">
+          <div class="update-heading"><h3 id="installedVersion">Installed version</h3><button id="checkUpdateButton" class="button secondary small-action" type="button">Check for updates</button></div>
+          <p id="updateStatusText" class="muted" role="status"></p>
+          <progress id="updateProgress" max="100" value="0" class="hidden" aria-label="Update download progress"></progress>
+          <button id="downloadUpdateButton" class="button primary hidden" type="button">Download update</button>
+          <button id="installUpdateButton" class="button primary hidden" type="button">Install and restart</button>
+        </section>
       </div>
     </dialog>
 

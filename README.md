@@ -9,8 +9,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/samanjoy2/hf-manual/releases/tag/v1.1.0"><img alt="Release v1.1.0" src="https://img.shields.io/badge/release-v1.1.0-1f4d3b?style=flat-square" /></a>
-  <a href="https://github.com/samanjoy2/hf-manual/releases/tag/v1.1.0"><img alt="Download Windows installer" src="https://img.shields.io/badge/download-Windows_x64-d89520?style=flat-square&logo=github" /></a>
+  <a href="https://github.com/samanjoy2/hf-manual/releases/tag/v1.2.0"><img alt="Release v1.2.0" src="https://img.shields.io/badge/release-v1.2.0-1f4d3b?style=flat-square" /></a>
+  <a href="https://github.com/samanjoy2/hf-manual/releases/tag/v1.2.0"><img alt="Download Windows installer" src="https://img.shields.io/badge/download-Windows_x64-d89520?style=flat-square&logo=github" /></a>
   <img alt="Windows" src="https://img.shields.io/badge/Windows-10%2B-1f4d3b?style=flat-square&logo=windows" />
   <img alt="Electron" src="https://img.shields.io/badge/Electron-desktop-1f4d3b?style=flat-square&logo=electron" />
 </p>
@@ -44,6 +44,8 @@ HF Access Desk brings pending, accepted, and rejected requests from all the gate
 - Export the current request list as CSV.
 - Keep an encrypted local audit trail of successful decisions and export it as CSV or JSON.
 - Refresh directly from Hugging Face whenever you need the latest state.
+- Refresh automatically and receive Windows notifications when new pending requests arrive.
+- Check for new GitHub releases, download a verified update, and choose when to install it.
 - Open a requester's Hugging Face profile by clicking their handle, or search their email with Google in your default browser.
 - Collapse the navigation sidebar to leave more room for large request queues; the preference is remembered locally.
 - Replace or forget the saved token from inside the app.
@@ -66,6 +68,12 @@ HF Access Desk brings pending, accepted, and rejected requests from all the gate
 <img src="docs/screenshots/sidebar-collapsed.png" alt="HF Access Desk with its navigation sidebar collapsed" />
 </details>
 
+<details>
+<summary><strong>Request monitoring and update settings</strong></summary>
+<br />
+<img src="docs/screenshots/settings-updates.png" alt="HF Access Desk request monitoring and update settings" />
+</details>
+
 ## Download and install
 
 HF Access Desk currently ships as a Windows x64 installer.
@@ -76,6 +84,10 @@ HF Access Desk currently ships as a Windows x64 installer.
 4. Launch **HF Access Desk** from the Desktop or Start Menu shortcut.
 
 The installer handles both situations automatically: it performs a clean installation when the app is not present, or upgrades the existing installation in place when an older version is detected. The encrypted token and application data are preserved during upgrades.
+
+Starting with v1.2.0, open **Settings & updates** using the sliders button. The installed app checks for stable GitHub releases at startup and every six hours. Choose **Download update**, then **Install and restart** to run the normal installer. Downloads are verified against the release's SHA-256 checksum, including a second check before installation. Updates are never installed without your action. Earlier versions need one manual upgrade to v1.2.0 to gain this feature.
+
+Requests refresh every five minutes by default. Change the interval or turn it off in **Settings & updates**. Monitoring works while the app is open, including when minimized; closing the app stops it. The first complete refresh establishes a baseline without announcing old requests. Later new pending requests generate one notification containing a count, without names, handles, or emails. Click it to open the pending queue. Windows notifications must be enabled for the app.
 
 The community build is not currently code-signed. Windows SmartScreen may therefore show an **Unknown publisher** warning. Release notes include a SHA-256 checksum so you can verify the downloaded installer.
 
@@ -96,11 +108,13 @@ HF Access Desk is designed so the credential and Hugging Face API access stay in
 | --- | --- |
 | Token at rest | Encrypted with Electron `safeStorage`, backed by Windows DPAPI |
 | Audit history at rest | Successful decisions encrypted with the same Windows protected storage |
+| Notification history at rest | Encrypted account baseline containing hashed request identifiers |
+| Update downloads | Restricted to this GitHub repository's stable release assets, with SHA-256 integrity checks |
 | Renderer isolation | Node.js integration disabled, context isolation enabled, sandbox enabled |
 | API access | Hugging Face requests run only in the main process |
 | IPC surface | A narrow preload bridge exposes only the operations the UI needs |
 | Navigation | In-app navigation, popups, and browser permissions are denied by default |
-| External links | Restricted to Hugging Face dataset pages and token settings |
+| External links | Restricted to Hugging Face profiles, dataset pages, token settings, and Google email searches |
 | Local removal | **Change token** lets you replace or forget the saved credential |
 
 Encrypted credential and audit data are stored in Electron's per-user application-data directory and are tied to the current Windows sign-in. They do not enter the project folder.
