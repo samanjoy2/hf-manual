@@ -17,9 +17,9 @@ const browser = [
 
 if (!browser) throw new Error("Microsoft Edge or Google Chrome is required to capture screenshots.");
 
-async function capture(name, demo, profileRoot) {
+async function capture(name, query, profileRoot) {
   const screenshot = path.join(output, `${name}.png`);
-  const profile = path.join(profileRoot, demo);
+  const profile = path.join(profileRoot, name);
   const result = spawnSync(browser, [
     "--headless=new",
     "--no-sandbox",
@@ -31,7 +31,7 @@ async function capture(name, demo, profileRoot) {
     "--window-size=1440,900",
     `--user-data-dir=${profile}`,
     `--screenshot=${screenshot}`,
-    `${pageUrl}?demo=${demo}`,
+    `${pageUrl}?${query}`,
   ], { stdio: "inherit" });
   if (result.status !== 0 || !existsSync(screenshot)) throw new Error(`Could not capture ${name}.png.`);
 }
@@ -40,8 +40,9 @@ async function capture(name, demo, profileRoot) {
   await mkdir(output, { recursive: true });
   const profileRoot = await mkdtemp(path.join(os.tmpdir(), "hf-access-desk-shots-"));
   try {
-    await capture("dashboard", "dashboard", profileRoot);
-    await capture("token-setup", "setup", profileRoot);
+    await capture("dashboard", "demo=dashboard", profileRoot);
+    await capture("token-setup", "demo=setup", profileRoot);
+    await capture("sidebar-collapsed", "demo=dashboard&sidebar=collapsed", profileRoot);
   } finally {
     await rm(profileRoot, { recursive: true, force: true });
   }

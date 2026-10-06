@@ -11,7 +11,8 @@ const state = {
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 const els = {
-  setupView: $("#setupView"), appView: $("#appView"), tokenForm: $("#tokenForm"), tokenInput: $("#tokenInput"), tokenError: $("#tokenError"),
+  appView: $("#appView"), sidebarToggle: $("#sidebarToggle"),
+  setupView: $("#setupView"), tokenForm: $("#tokenForm"), tokenInput: $("#tokenInput"), tokenError: $("#tokenError"),
   saveTokenButton: $("#saveTokenButton"), toggleToken: $("#toggleToken"), tokenHelp: $("#tokenHelp"), cancelTokenButton: $("#cancelTokenButton"), forgetTokenButton: $("#forgetTokenButton"),
   dashboardContent: $("#dashboardContent"), setupPanel: $("#setupPanel"), loadingState: $("#loadingState"), emptyState: $("#emptyState"),
   requestRows: $("#requestRows"), searchInput: $("#searchInput"), datasetFilter: $("#datasetFilter"), selectAll: $("#selectAll"),
@@ -20,6 +21,20 @@ const els = {
   dialog: $("#confirmDialog"), confirmForm: $("#confirmForm"), confirmTitle: $("#confirmTitle"), confirmMessage: $("#confirmMessage"), confirmAction: $("#confirmAction"),
   reasonWrap: $("#reasonWrap"), reasonInput: $("#reasonInput"), reasonCount: $("#reasonCount"), toastRegion: $("#toastRegion"),
 };
+
+function setSidebarCollapsed(collapsed, persist = true) {
+  els.appView.classList.toggle("sidebar-collapsed", collapsed);
+  els.sidebarToggle.setAttribute("aria-expanded", String(!collapsed));
+  els.sidebarToggle.setAttribute("aria-label", collapsed ? "Expand sidebar" : "Collapse sidebar");
+  els.sidebarToggle.title = collapsed ? "Expand sidebar" : "Collapse sidebar";
+  if (persist) {
+    try { localStorage.setItem("hf-access-desk:sidebar-collapsed", String(collapsed)); } catch { /* Preference persistence is optional. */ }
+  }
+}
+
+let sidebarStartsCollapsed = false;
+try { sidebarStartsCollapsed = localStorage.getItem("hf-access-desk:sidebar-collapsed") === "true"; } catch { /* Use the expanded default. */ }
+setSidebarCollapsed(sidebarStartsCollapsed, false);
 
 function friendlyError(error) {
   return String(error?.message || error || "Something went wrong.")
@@ -88,14 +103,26 @@ function actionButtons(request) {
   return `<button class="row-button" data-action="reset" ${data}>Reset request</button><button class="row-button approve" data-action="accepted" ${data}>Approve</button>`;
 }
 
+function datasetUrl(repoId) {
+  return `https://huggingface.co/datasets/${String(repoId).split("/").map(encodeURIComponent).join("/")}`;
+}
+
+function profileUrl(username) {
+  return `https://huggingface.co/${encodeURIComponent(String(username))}`;
+}
+
+function emailSearchUrl(email) {
+  return `https://www.google.com/search?q=${encodeURIComponent(String(email))}`;
+}
+
 function renderTable() {
   const requests = visibleRequests();
   els.requestRows.innerHTML = requests.map((request) => {
     const requested = formatDate(request.requestedAt);
     return `<tr>
       <td class="check-cell"><input class="row-check" type="checkbox" aria-label="Select ${escapeHtml(request.username)}" data-id="${escapeHtml(request.id)}" ${state.selected.has(request.id) ? "checked" : ""}></td>
-      <td><div class="person"><span class="initial">${escapeHtml(initials(request.fullname || request.username))}</span><div><strong>${escapeHtml(request.fullname || request.username)}</strong><span>@${escapeHtml(request.username)}${request.email ? ` · ${escapeHtml(request.email)}` : ""}</span></div></div></td>
-      <td><a class="repo-link" href="https://huggingface.co/datasets/${encodeURI(request.repoId)}">${escapeHtml(request.repoId)}</a></td>
+      <td><div class="person"><span class="initial">${escapeHtml(initials(request.fullname || request.username))}</span><div><strong>${escapeHtml(request.fullname || request.username)}</strong><span class="person-meta"><a class="person-link" data-external href="${escapeHtml(profileUrl(request.username))}" title="Open @${escapeHtml(request.username)} on Hugging Face">@${escapeHtml(request.username)}</a>${request.email ? ` · <a class="person-link email-link" data-external href="${escapeHtml(emailSearchUrl(request.email))}" title="Search this email with Google">${escapeHtml(request.email)}</a>` : ""}</span></div></div></td>
+      <td><a class="repo-link" data-external href="${escapeHtml(datasetUrl(request.repoId))}">${escapeHtml(request.repoId)}</a></td>
       <td><span class="date-primary">${escapeHtml(requested.date)}</span><span class="date-secondary">${escapeHtml(requested.time)}</span></td>
       <td><span class="status-pill status-${escapeHtml(request.status)}">${escapeHtml(request.status)}</span></td>
       <td><div class="row-actions">${actionButtons(request)}</div></td>
@@ -253,6 +280,7 @@ els.forgetTokenButton.addEventListener("click", async () => {
 });
 
 els.refreshButton.addEventListener("click", () => loadOverview(true));
+els.sidebarToggle.addEventListener("click", () => setSidebarCollapsed(!els.appView.classList.contains("sidebar-collapsed")));
 els.exportButton.addEventListener("click", exportCsv);
 els.searchInput.addEventListener("input", () => { state.query = els.searchInput.value; state.selected.clear(); renderTable(); });
 els.datasetFilter.addEventListener("change", () => { state.dataset = els.datasetFilter.value; state.selected.clear(); renderTable(); });
@@ -279,7 +307,7 @@ els.requestRows.addEventListener("change", (event) => {
 });
 
 els.requestRows.addEventListener("click", (event) => {
-  const link = event.target.closest(".repo-link");
+  const link = event.target.closest("a[data-external]");
   if (link) { event.preventDefault(); window.hfDesk.openExternal(link.href); return; }
   const button = event.target.closest("[data-action]");
   if (!button) return;

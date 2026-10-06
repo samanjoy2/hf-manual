@@ -9,8 +9,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/samanjoy2/hf-manual/releases/tag/v1.0.1"><img alt="Release v1.0.1" src="https://img.shields.io/badge/release-v1.0.1-1f4d3b?style=flat-square" /></a>
-  <a href="https://github.com/samanjoy2/hf-manual/releases/tag/v1.0.1"><img alt="Download Windows installer" src="https://img.shields.io/badge/download-Windows_x64-d89520?style=flat-square&logo=github" /></a>
+  <a href="https://github.com/samanjoy2/hf-manual/releases/tag/v1.0.2"><img alt="Release v1.0.2" src="https://img.shields.io/badge/release-v1.0.2-1f4d3b?style=flat-square" /></a>
+  <a href="https://github.com/samanjoy2/hf-manual/releases/tag/v1.0.2"><img alt="Download Windows installer" src="https://img.shields.io/badge/download-Windows_x64-d89520?style=flat-square&logo=github" /></a>
   <img alt="Windows" src="https://img.shields.io/badge/Windows-10%2B-1f4d3b?style=flat-square&logo=windows" />
   <img alt="Electron" src="https://img.shields.io/badge/Electron-desktop-1f4d3b?style=flat-square&logo=electron" />
 </p>
@@ -41,6 +41,8 @@ HF Access Desk brings pending, accepted, and rejected requests from all the gate
 - Search by requester or dataset and narrow the queue with a dataset filter.
 - Export the current request list as CSV.
 - Refresh directly from Hugging Face whenever you need the latest state.
+- Open a requester's Hugging Face profile by clicking their handle, or search their email with Google in your default browser.
+- Collapse the navigation sidebar to leave more room for large request queues; the preference is remembered locally.
 - Replace or forget the saved token from inside the app.
 
 ## A look inside
@@ -50,6 +52,12 @@ HF Access Desk brings pending, accepted, and rejected requests from all the gate
 | ![Secure token setup](docs/screenshots/token-setup.png) | ![Combined dataset request dashboard](docs/screenshots/dashboard.png) |
 | Paste your own token once. The app validates it before encrypted local storage. | See counts, datasets, request status, dates, and available actions at a glance. |
 
+<details>
+<summary><strong>Collapsed navigation view</strong></summary>
+<br />
+<img src="docs/screenshots/sidebar-collapsed.png" alt="HF Access Desk with its navigation sidebar collapsed" />
+</details>
+
 ## Download and install
 
 HF Access Desk currently ships as a Windows x64 installer.
@@ -58,6 +66,8 @@ HF Access Desk currently ships as a Windows x64 installer.
 2. Download `HF-Access-Desk-Setup-<version>.exe` from **Assets**.
 3. Run the installer and choose an installation folder.
 4. Launch **HF Access Desk** from the Desktop or Start Menu shortcut.
+
+The installer handles both situations automatically: it performs a clean installation when the app is not present, or upgrades the existing installation in place when an older version is detected. The encrypted token and application data are preserved during upgrades.
 
 The community build is not currently code-signed. Windows SmartScreen may therefore show an **Unknown publisher** warning. Release notes include a SHA-256 checksum so you can verify the downloaded installer.
 

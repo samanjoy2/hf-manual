@@ -28,9 +28,23 @@ button { color: inherit; }
 
 .app-shell { display: grid; grid-template-columns: 244px minmax(0, 1fr); min-height: 100vh; }
 .sidebar { position: sticky; top: 0; height: 100vh; padding: 28px 18px 22px; background: #ebe8df; border-right: 1px solid #dedbd2; display: flex; flex-direction: column; }
-.brand { display: flex; align-items: center; gap: 11px; padding: 0 10px 28px; color: var(--ink); text-decoration: none; font-family: Georgia, "Times New Roman", serif; font-weight: 700; font-size: 18px; }
+.sidebar-head { display: flex; align-items: flex-start; gap: 4px; }
+.brand { display: flex; align-items: center; gap: 11px; padding: 0 10px 28px; color: var(--ink); text-decoration: none; font-family: Georgia, "Times New Roman", serif; font-weight: 700; font-size: 18px; white-space: nowrap; }
 .brand-mark { display: block; width: 66px; height: 66px; object-fit: contain; filter: drop-shadow(0 8px 14px rgba(31, 77, 59, .14)); }
 .brand-mark.small { width: 38px; height: 38px; }
+.sidebar-toggle { display: grid; place-items: center; flex: 0 0 30px; width: 30px; height: 30px; margin-top: 4px; border: 1px solid #d7d4cb; border-radius: 9px; background: rgba(255,255,255,.48); color: #62675f; cursor: pointer; transition: background .15s, color .15s, transform .2s; }
+.sidebar-toggle:hover { background: var(--surface); color: var(--green); }
+.sidebar-toggle svg { width: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform .2s; }
+.app-shell.sidebar-collapsed { grid-template-columns: 88px minmax(0, 1fr); }
+.sidebar-collapsed .sidebar { padding-inline: 10px; }
+.sidebar-collapsed .sidebar-head { display: grid; justify-items: center; }
+.sidebar-collapsed .brand { justify-content: center; padding: 0 0 8px; }
+.sidebar-collapsed .brand > span, .sidebar-collapsed .nav-item > span:nth-child(2), .sidebar-collapsed .nav-count, .sidebar-collapsed .account-copy, .sidebar-collapsed .text-button { display: none; }
+.sidebar-collapsed .sidebar-toggle { margin: 0 0 18px; }
+.sidebar-collapsed .sidebar-toggle svg { transform: rotate(180deg); }
+.sidebar-collapsed .nav-item { grid-template-columns: 1fr; place-items: center; height: 44px; }
+.sidebar-collapsed .nav-icon { font-size: 12px; }
+.sidebar-collapsed .account-mini { justify-content: center; }
 nav { display: grid; gap: 5px; }
 .nav-item { width: 100%; border: 0; border-radius: 10px; background: transparent; padding: 11px 12px; display: grid; grid-template-columns: 16px 1fr auto; align-items: center; gap: 9px; text-align: left; cursor: pointer; color: #575c56; transition: background .16s, color .16s; }
 .nav-item:hover { background: rgba(255,255,255,.44); color: var(--ink); }
@@ -97,6 +111,8 @@ input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--green); 
 .person .initial { display: grid; place-items: center; flex: 0 0 34px; width: 34px; height: 34px; border-radius: 50%; background: var(--green-soft); color: var(--green); font-size: 11px; font-weight: 800; }
 .person strong, .person span { display: block; max-width: 235px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .person strong { font-size: 13px; }.person span { color: var(--muted); font-size: 11px; margin-top: 2px; }
+.person-link { color: inherit; text-decoration: none; }.person-link:hover { color: var(--green); text-decoration: underline; }
+.email-link:hover { color: #315f86; }
 .repo-link { color: var(--ink); text-decoration: none; white-space: nowrap; }.repo-link:hover { text-decoration: underline; }
 .date-primary { display: block; white-space: nowrap; }.date-secondary { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; white-space: nowrap; }
 .status-pill { display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: capitalize; }
@@ -159,13 +175,14 @@ dialog form { position: relative; padding: 28px; } dialog h2 { margin: 0 0 8px; 
 
 @media (max-width: 900px) {
   .app-shell { grid-template-columns: 76px minmax(0, 1fr); }
-  .sidebar { padding-inline: 10px; }.brand { padding-inline: 11px; }.brand > span:last-child, .nav-item > span:nth-child(2), .nav-count, .account-copy, .text-button { display: none; }
+  .app-shell.sidebar-collapsed { grid-template-columns: 76px minmax(0, 1fr); }
+  .sidebar { padding-inline: 10px; }.sidebar-head { display: block; }.brand { padding-inline: 11px; }.brand > span:last-child, .nav-item > span:nth-child(2), .nav-count, .account-copy, .text-button, .sidebar-toggle { display: none; }
   .nav-item { grid-template-columns: 1fr; place-items: center; height: 44px; }.nav-icon { font-size: 12px; }.sidebar-foot { padding-inline: 10px; }.account-mini { justify-content: center; }
   .stats-grid { grid-template-columns: 1fr 1fr; }.stat-card:first-child { grid-column: 1 / -1; }
 }
 @media (max-width: 640px) {
   .app-shell { display: block; }.sidebar { position: fixed; z-index: 20; top: auto; bottom: 0; width: 100%; height: 66px; padding: 8px 14px; border-right: 0; border-top: 1px solid var(--line); flex-direction: row; }
-  .brand, .sidebar-foot { display: none; }.sidebar nav { width: 100%; grid-template-columns: repeat(4, 1fr); }.nav-item { height: 48px; padding: 4px; }.nav-item > span:nth-child(2) { display: block; font-size: 9px; }.nav-item { grid-template-columns: 1fr; gap: 1px; }
+  .sidebar-head, .brand, .sidebar-foot { display: none; }.sidebar nav { width: 100%; grid-template-columns: repeat(4, 1fr); }.nav-item { height: 48px; padding: 4px; }.nav-item > span:nth-child(2) { display: block; font-size: 9px; }.nav-item { grid-template-columns: 1fr; gap: 1px; }
   .main-content { padding: 24px 14px 92px; }.topbar { align-items: center; margin-bottom: 22px; }.topbar h1 { font-size: 31px; }.last-updated { display: none; }
   .stats-grid { grid-template-columns: 1fr 1fr; gap: 9px; }.stat-card { min-height: 120px; padding: 17px; }.stat-card:first-child { grid-column: 1 / -1; }.stat-card strong { font-size: 32px; }
   .toolbar { flex-wrap: wrap; }.search-wrap { flex-basis: 100%; }.toolbar select { flex: 1; min-width: 0; }.toolbar .button { padding-inline: 12px; }

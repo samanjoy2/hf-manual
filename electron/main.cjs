@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, safeStorage, shell, session } = require("el
 const { mkdir, readFile, rename, unlink, writeFile } = require("node:fs/promises");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
+const { allowedExternalUrl } = require("./external-links.cjs");
 
 const HF_ENDPOINT = "https://huggingface.co";
 const CACHE_TTL_MS = 60_000;
@@ -263,13 +264,6 @@ async function updateRequests(body) {
   });
   overviewCache = null;
   return { results, succeeded: results.filter((item) => item.ok).length, failed: results.filter((item) => !item.ok).length };
-}
-
-function allowedExternalUrl(value) {
-  try {
-    const url = new URL(String(value));
-    return url.protocol === "https:" && url.hostname === "huggingface.co" && (url.pathname.startsWith("/datasets/") || url.pathname === "/settings/tokens");
-  } catch { return false; }
 }
 
 function registerIpc() {

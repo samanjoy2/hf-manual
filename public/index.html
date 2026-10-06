@@ -39,9 +39,14 @@
 
     <div id="appView" class="app-shell hidden">
       <aside class="sidebar">
-        <div class="brand" aria-label="HF Access Desk home">
-          <img class="brand-mark small" src="./app-icon.png" alt="" aria-hidden="true" />
-          <span>Access Desk</span>
+        <div class="sidebar-head">
+          <div class="brand" aria-label="HF Access Desk home">
+            <img class="brand-mark small" src="./app-icon.png" alt="" aria-hidden="true" />
+            <span>Access Desk</span>
+          </div>
+          <button id="sidebarToggle" class="sidebar-toggle" type="button" aria-label="Collapse sidebar" aria-expanded="true" title="Collapse sidebar">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+          </button>
         </div>
         <nav aria-label="Request status">
           <button class="nav-item active" data-status="pending">

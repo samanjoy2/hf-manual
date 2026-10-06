@@ -1,6 +1,8 @@
 (() => {
-  const demoView = new URLSearchParams(window.location.search).get("demo");
+  const demoParams = new URLSearchParams(window.location.search);
+  const demoView = demoParams.get("demo");
   if (!demoView || window.hfDesk) return;
+  if (demoParams.get("sidebar") === "collapsed") localStorage.setItem("hf-access-desk:sidebar-collapsed", "true");
 
   const datasets = [
     { id: "sample-lab/Clinical-Language-Benchmark", gated: "manual", private: false, namespace: "sample-lab", errors: [] },

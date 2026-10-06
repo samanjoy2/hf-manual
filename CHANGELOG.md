@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.2 — 2026-10-06
+
+- Made requester handles open their Hugging Face profiles in the default browser.
+- Made requester email addresses open a Google search in the default browser.
+- Added strict external-link validation for Hugging Face profiles, datasets, token settings, and Google email searches.
+- Added a collapsible desktop sidebar that remembers the user's preference.
+- Documented that the Windows installer supports both clean installation and in-place upgrades while preserving app data.
+
 ## 1.0.1 — 2026-09-26
 
 - Added the custom dataset-shield application icon throughout the desktop interface and Windows build.
