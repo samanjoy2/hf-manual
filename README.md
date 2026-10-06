@@ -9,8 +9,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/samanjoy2/hf-manual/releases/tag/v1.0.2"><img alt="Release v1.0.2" src="https://img.shields.io/badge/release-v1.0.2-1f4d3b?style=flat-square" /></a>
-  <a href="https://github.com/samanjoy2/hf-manual/releases/tag/v1.0.2"><img alt="Download Windows installer" src="https://img.shields.io/badge/download-Windows_x64-d89520?style=flat-square&logo=github" /></a>
+  <a href="https://github.com/samanjoy2/hf-manual/releases/tag/v1.1.0"><img alt="Release v1.1.0" src="https://img.shields.io/badge/release-v1.1.0-1f4d3b?style=flat-square" /></a>
+  <a href="https://github.com/samanjoy2/hf-manual/releases/tag/v1.1.0"><img alt="Download Windows installer" src="https://img.shields.io/badge/download-Windows_x64-d89520?style=flat-square&logo=github" /></a>
   <img alt="Windows" src="https://img.shields.io/badge/Windows-10%2B-1f4d3b?style=flat-square&logo=windows" />
   <img alt="Electron" src="https://img.shields.io/badge/Electron-desktop-1f4d3b?style=flat-square&logo=electron" />
 </p>
@@ -38,8 +38,11 @@ HF Access Desk brings pending, accepted, and rejected requests from all the gate
 - Review pending, accepted, rejected, or all requests in one consistent table.
 - Approve, reject, revoke, reset, or return a request to pending.
 - Select many requests and make one bulk decision.
-- Search by requester or dataset and narrow the queue with a dataset filter.
+- Search by requester or dataset, narrow the queue by dataset and request date, and sort the results five ways.
+- Open a request-details drawer to inspect submitted form answers without leaving the queue.
+- See a requester's history across all connected datasets from the same details view.
 - Export the current request list as CSV.
+- Keep an encrypted local audit trail of successful decisions and export it as CSV or JSON.
 - Refresh directly from Hugging Face whenever you need the latest state.
 - Open a requester's Hugging Face profile by clicking their handle, or search their email with Google in your default browser.
 - Collapse the navigation sidebar to leave more room for large request queues; the preference is remembered locally.
@@ -51,6 +54,11 @@ HF Access Desk brings pending, accepted, and rejected requests from all the gate
 | --- | --- |
 | ![Secure token setup](docs/screenshots/token-setup.png) | ![Combined dataset request dashboard](docs/screenshots/dashboard.png) |
 | Paste your own token once. The app validates it before encrypted local storage. | See counts, datasets, request status, dates, and available actions at a glance. |
+
+| Request context and history | Encrypted local audit trail |
+| --- | --- |
+| ![Request details and requester history](docs/screenshots/request-details.png) | ![Encrypted local audit log](docs/screenshots/audit-log.png) |
+| Inspect submitted answers and every request from the same user across connected datasets. | Review successful decisions and export the log as CSV or JSON. |
 
 <details>
 <summary><strong>Collapsed navigation view</strong></summary>
@@ -87,6 +95,7 @@ HF Access Desk is designed so the credential and Hugging Face API access stay in
 | Protection | Implementation |
 | --- | --- |
 | Token at rest | Encrypted with Electron `safeStorage`, backed by Windows DPAPI |
+| Audit history at rest | Successful decisions encrypted with the same Windows protected storage |
 | Renderer isolation | Node.js integration disabled, context isolation enabled, sandbox enabled |
 | API access | Hugging Face requests run only in the main process |
 | IPC surface | A narrow preload bridge exposes only the operations the UI needs |
@@ -94,7 +103,7 @@ HF Access Desk is designed so the credential and Hugging Face API access stay in
 | External links | Restricted to Hugging Face dataset pages and token settings |
 | Local removal | **Change token** lets you replace or forget the saved credential |
 
-Encrypted credential data is stored in Electron's per-user application-data directory and is tied to the current Windows sign-in. It does not enter the project folder.
+Encrypted credential and audit data are stored in Electron's per-user application-data directory and are tied to the current Windows sign-in. They do not enter the project folder.
 
 ## Build from source
 

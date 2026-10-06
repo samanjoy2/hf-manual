@@ -43,6 +43,8 @@ async function capture(name, query, profileRoot) {
     await capture("dashboard", "demo=dashboard", profileRoot);
     await capture("token-setup", "demo=setup", profileRoot);
     await capture("sidebar-collapsed", "demo=dashboard&sidebar=collapsed", profileRoot);
+    await capture("request-details", "demo=dashboard&details=pending-01", profileRoot);
+    await capture("audit-log", "demo=dashboard&audit=1", profileRoot);
   } finally {
     await rm(profileRoot, { recursive: true, force: true });
   }

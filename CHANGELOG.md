@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.0 — 2026-10-06
+
+- Added a request-details drawer with submitted form answers and direct dataset, profile, and email links.
+- Added requester history across every connected gated dataset.
+- Added sorting by date, requester, dataset, or status, plus requested-date filters and one-click filter reset.
+- Added an encrypted local audit log for successful access decisions with CSV and JSON exports.
+- Added privacy-safe README screenshots for the request-details and audit-log workflows.
+
 ## 1.0.2 — 2026-10-06
 
 - Made requester handles open their Hugging Face profiles in the default browser.

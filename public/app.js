@@ -3,6 +3,9 @@ const state = {
   status: "pending",
   query: "",
   dataset: "all",
+  sort: "newest",
+  dateRange: "all",
+  audit: [],
   selected: new Set(),
   pendingAction: null,
   hasToken: false,
@@ -17,9 +20,12 @@ const els = {
   dashboardContent: $("#dashboardContent"), setupPanel: $("#setupPanel"), loadingState: $("#loadingState"), emptyState: $("#emptyState"),
   requestRows: $("#requestRows"), searchInput: $("#searchInput"), datasetFilter: $("#datasetFilter"), selectAll: $("#selectAll"),
   bulkBar: $("#bulkBar"), selectedCount: $("#selectedCount"), refreshButton: $("#refreshButton"), exportButton: $("#exportButton"),
+  sortSelect: $("#sortSelect"), dateFilter: $("#dateFilter"), clearFiltersButton: $("#clearFiltersButton"), resultCount: $("#resultCount"), auditButton: $("#auditButton"),
   pageTitle: $("#pageTitle"), lastUpdated: $("#lastUpdated"), warningBar: $("#warningBar"), accountMini: $("#accountMini"), changeTokenButton: $("#changeTokenButton"),
   dialog: $("#confirmDialog"), confirmForm: $("#confirmForm"), confirmTitle: $("#confirmTitle"), confirmMessage: $("#confirmMessage"), confirmAction: $("#confirmAction"),
   reasonWrap: $("#reasonWrap"), reasonInput: $("#reasonInput"), reasonCount: $("#reasonCount"), toastRegion: $("#toastRegion"),
+  detailsDialog: $("#detailsDialog"), detailsTitle: $("#detailsTitle"), detailsBody: $("#detailsBody"), closeDetailsButton: $("#closeDetailsButton"),
+  auditDialog: $("#auditDialog"), auditRows: $("#auditRows"), auditEmpty: $("#auditEmpty"), closeAuditButton: $("#closeAuditButton"), exportAuditCsvButton: $("#exportAuditCsvButton"), exportAuditJsonButton: $("#exportAuditJsonButton"),
 };
 
 function setSidebarCollapsed(collapsed, persist = true) {
@@ -88,12 +94,28 @@ function formatDate(value) {
 function visibleRequests() {
   if (!state.data) return [];
   const query = state.query.trim().toLowerCase();
-  return state.data.requests.filter((request) => {
+  const cutoff = state.dateRange === "all" ? 0 : Date.now() - Number(state.dateRange) * 86_400_000;
+  const requests = state.data.requests.filter((request) => {
     if (state.status !== "all" && request.status !== state.status) return false;
     if (state.dataset !== "all" && request.repoId !== state.dataset) return false;
+    if (cutoff) {
+      const requestedAt = new Date(request.requestedAt || 0).getTime();
+      if (!Number.isFinite(requestedAt) || requestedAt < cutoff) return false;
+    }
     if (!query) return true;
     return [request.username, request.fullname, request.email, request.repoId].some((value) => String(value || "").toLowerCase().includes(query));
   });
+  const text = (value) => String(value || "").toLocaleLowerCase();
+  const date = (value) => new Date(value || 0).getTime() || 0;
+  const statusOrder = { pending: 0, accepted: 1, rejected: 2 };
+  const comparators = {
+    newest: (a, b) => date(b.requestedAt) - date(a.requestedAt),
+    oldest: (a, b) => date(a.requestedAt) - date(b.requestedAt),
+    requester: (a, b) => text(a.fullname || a.username).localeCompare(text(b.fullname || b.username)),
+    dataset: (a, b) => text(a.repoId).localeCompare(text(b.repoId)),
+    status: (a, b) => (statusOrder[a.status] ?? 9) - (statusOrder[b.status] ?? 9) || date(b.requestedAt) - date(a.requestedAt),
+  };
+  return requests.sort(comparators[state.sort] || comparators.newest);
 }
 
 function actionButtons(request) {
@@ -121,7 +143,7 @@ function renderTable() {
     const requested = formatDate(request.requestedAt);
     return `<tr>
       <td class="check-cell"><input class="row-check" type="checkbox" aria-label="Select ${escapeHtml(request.username)}" data-id="${escapeHtml(request.id)}" ${state.selected.has(request.id) ? "checked" : ""}></td>
-      <td><div class="person"><span class="initial">${escapeHtml(initials(request.fullname || request.username))}</span><div><strong>${escapeHtml(request.fullname || request.username)}</strong><span class="person-meta"><a class="person-link" data-external href="${escapeHtml(profileUrl(request.username))}" title="Open @${escapeHtml(request.username)} on Hugging Face">@${escapeHtml(request.username)}</a>${request.email ? ` · <a class="person-link email-link" data-external href="${escapeHtml(emailSearchUrl(request.email))}" title="Search this email with Google">${escapeHtml(request.email)}</a>` : ""}</span></div></div></td>
+      <td><div class="person"><span class="initial">${escapeHtml(initials(request.fullname || request.username))}</span><div><strong><button class="requester-name" type="button" data-details="${escapeHtml(request.id)}" title="View request details">${escapeHtml(request.fullname || request.username)}</button></strong><span class="person-meta"><a class="person-link" data-external href="${escapeHtml(profileUrl(request.username))}" title="Open @${escapeHtml(request.username)} on Hugging Face">@${escapeHtml(request.username)}</a>${request.email ? ` · <a class="person-link email-link" data-external href="${escapeHtml(emailSearchUrl(request.email))}" title="Search this email with Google">${escapeHtml(request.email)}</a>` : ""}</span></div></div></td>
       <td><a class="repo-link" data-external href="${escapeHtml(datasetUrl(request.repoId))}">${escapeHtml(request.repoId)}</a></td>
       <td><span class="date-primary">${escapeHtml(requested.date)}</span><span class="date-secondary">${escapeHtml(requested.time)}</span></td>
       <td><span class="status-pill status-${escapeHtml(request.status)}">${escapeHtml(request.status)}</span></td>
@@ -133,6 +155,7 @@ function renderTable() {
   const visibleIds = requests.map((request) => request.id);
   els.selectAll.checked = Boolean(visibleIds.length) && visibleIds.every((id) => state.selected.has(id));
   els.selectAll.indeterminate = visibleIds.some((id) => state.selected.has(id)) && !els.selectAll.checked;
+  els.resultCount.textContent = `${requests.length} shown`;
   renderBulkBar();
 }
 
@@ -175,7 +198,9 @@ async function loadOverview(force = false) {
   els.refreshButton.classList.add("spinning");
   els.loadingState.classList.remove("hidden");
   try {
-    state.data = await window.hfDesk.getOverview(force);
+    const [overview, audit] = await Promise.all([window.hfDesk.getOverview(force), window.hfDesk.getAuditLog()]);
+    state.data = overview;
+    state.audit = audit;
     renderOverview();
   } catch (error) {
     const message = friendlyError(error);
@@ -214,13 +239,14 @@ async function performAction() {
   try {
     const result = await window.hfDesk.updateRequests({
       action: pending.action,
-      items: pending.requests.map(({ repoId, username }) => ({ repoId, username })),
+      items: pending.requests.map(({ repoId, username, status }) => ({ repoId, username, status })),
       reason: els.reasonInput.value.trim(),
     });
     els.dialog.close();
     state.selected.clear();
     toast(result.failed ? `${result.succeeded} succeeded; ${result.failed} failed.` : `${result.succeeded} request${result.succeeded === 1 ? "" : "s"} updated.`, result.failed ? "error" : "success");
     await loadOverview(true);
+    if (result.auditWarning) toast(result.auditWarning, "error");
   } catch (error) {
     toast(friendlyError(error), "error");
   } finally {
@@ -238,6 +264,92 @@ function exportCsv() {
   link.download = `hf-access-requests-${state.status}-${new Date().toISOString().slice(0, 10)}.csv`;
   link.click();
   URL.revokeObjectURL(link.href);
+}
+
+function downloadText(filename, content, type) {
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(new Blob([content], { type }));
+  link.download = filename;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 0);
+}
+
+function fullDate(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? String(value) : new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(date);
+}
+
+function fieldEntries(fields) {
+  if (!fields) return [];
+  if (Array.isArray(fields)) return fields.map((item, index) => {
+    if (item && typeof item === "object") return [item.label || item.name || item.question || `Field ${index + 1}`, item.value ?? item.answer ?? item.response ?? item];
+    return [`Field ${index + 1}`, item];
+  });
+  if (typeof fields === "object") return Object.entries(fields);
+  return [["Response", fields]];
+}
+
+function printableValue(value) {
+  if (value === true) return "Yes";
+  if (value === false) return "No";
+  if (value == null || value === "") return "—";
+  if (typeof value === "object") {
+    try { return JSON.stringify(value, null, 2); } catch { return String(value); }
+  }
+  return String(value);
+}
+
+function auditActionLabel(entry) {
+  if (entry.action === "accepted") return "Approved";
+  if (entry.action === "rejected") return entry.previousStatus === "accepted" ? "Revoked" : "Rejected";
+  if (entry.action === "pending") return "Moved to pending";
+  return "Reset request";
+}
+
+function openRequestDetails(request) {
+  const remoteHistory = state.data.requests
+    .filter((item) => String(item.username).toLowerCase() === String(request.username).toLowerCase())
+    .sort((a, b) => new Date(b.requestedAt || 0) - new Date(a.requestedAt || 0));
+  const localHistory = state.audit.filter((entry) => String(entry.username).toLowerCase() === String(request.username).toLowerCase());
+  const fields = fieldEntries(request.fields);
+  els.detailsTitle.textContent = request.fullname || request.username;
+  els.detailsBody.innerHTML = `
+    <div class="details-identity">
+      <span class="initial large-initial">${escapeHtml(initials(request.fullname || request.username))}</span>
+      <div><a data-external href="${escapeHtml(profileUrl(request.username))}">@${escapeHtml(request.username)}</a>${request.email ? `<a data-external href="${escapeHtml(emailSearchUrl(request.email))}">${escapeHtml(request.email)}</a>` : ""}</div>
+      <span class="status-pill status-${escapeHtml(request.status)}">${escapeHtml(request.status)}</span>
+    </div>
+    <section class="detail-section"><h3>Request</h3><dl class="detail-grid">
+      <div><dt>Dataset</dt><dd><a data-external href="${escapeHtml(datasetUrl(request.repoId))}">${escapeHtml(request.repoId)}</a></dd></div>
+      <div><dt>Requested</dt><dd>${escapeHtml(fullDate(request.requestedAt))}</dd></div>
+      <div><dt>Reviewed</dt><dd>${escapeHtml(fullDate(request.reviewedAt))}</dd></div>
+    </dl></section>
+    <section class="detail-section"><h3>Submitted answers</h3>${fields.length ? `<dl class="field-list">${fields.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(printableValue(value))}</dd></div>`).join("")}</dl>` : `<p class="muted">No additional form answers were returned for this request.</p>`}</section>
+    <section class="detail-section"><h3>Requests across datasets <span>${remoteHistory.length}</span></h3><div class="history-list">${remoteHistory.map((item) => `<article><div><strong>${escapeHtml(item.repoId)}</strong><small>${escapeHtml(fullDate(item.requestedAt))}</small></div><span class="status-pill status-${escapeHtml(item.status)}">${escapeHtml(item.status)}</span></article>`).join("")}</div></section>
+    <section class="detail-section"><h3>Local decision history <span>${localHistory.length}</span></h3>${localHistory.length ? `<div class="history-list">${localHistory.map((entry) => `<article><div><strong>${escapeHtml(auditActionLabel(entry))} · ${escapeHtml(entry.repoId)}</strong><small>${escapeHtml(fullDate(entry.timestamp))}${entry.reason ? ` · ${escapeHtml(entry.reason)}` : ""}</small></div></article>`).join("")}</div>` : `<p class="muted">No local decisions recorded for this requester yet.</p>`}</section>`;
+  els.detailsDialog.showModal();
+}
+
+function renderAuditLog() {
+  els.auditRows.innerHTML = state.audit.map((entry) => `<tr>
+    <td><span class="date-primary">${escapeHtml(formatDate(entry.timestamp).date)}</span><span class="date-secondary">${escapeHtml(formatDate(entry.timestamp).time)}</span></td>
+    <td><a class="person-link" data-external href="${escapeHtml(profileUrl(entry.username))}">@${escapeHtml(entry.username)}</a></td>
+    <td><a class="repo-link" data-external href="${escapeHtml(datasetUrl(entry.repoId))}">${escapeHtml(entry.repoId)}</a></td>
+    <td><strong>${escapeHtml(auditActionLabel(entry))}</strong></td>
+    <td>${escapeHtml(entry.reason || "—")}</td>
+  </tr>`).join("");
+  els.auditEmpty.classList.toggle("hidden", state.audit.length > 0);
+}
+
+function exportAuditCsv() {
+  const quote = (value) => `"${String(value ?? "").replaceAll('"', '""')}"`;
+  const rows = [["timestamp", "requester", "dataset", "decision", "previous status", "reason"], ...state.audit.map((entry) => [entry.timestamp, entry.username, entry.repoId, auditActionLabel(entry), entry.previousStatus, entry.reason])];
+  downloadText(`hf-access-audit-${new Date().toISOString().slice(0, 10)}.csv`, rows.map((row) => row.map(quote).join(",")).join("\r\n"), "text/csv;charset=utf-8");
+}
+
+function exportAuditJson() {
+  downloadText(`hf-access-audit-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify({ exportedAt: new Date().toISOString(), entries: state.audit }, null, 2), "application/json;charset=utf-8");
 }
 
 els.tokenForm.addEventListener("submit", async (event) => {
@@ -284,6 +396,25 @@ els.sidebarToggle.addEventListener("click", () => setSidebarCollapsed(!els.appVi
 els.exportButton.addEventListener("click", exportCsv);
 els.searchInput.addEventListener("input", () => { state.query = els.searchInput.value; state.selected.clear(); renderTable(); });
 els.datasetFilter.addEventListener("change", () => { state.dataset = els.datasetFilter.value; state.selected.clear(); renderTable(); });
+els.sortSelect.addEventListener("change", () => { state.sort = els.sortSelect.value; renderTable(); });
+els.dateFilter.addEventListener("change", () => { state.dateRange = els.dateFilter.value; state.selected.clear(); renderTable(); });
+els.clearFiltersButton.addEventListener("click", () => {
+  state.query = "";
+  state.dataset = "all";
+  state.sort = "newest";
+  state.dateRange = "all";
+  els.searchInput.value = "";
+  els.datasetFilter.value = "all";
+  els.sortSelect.value = "newest";
+  els.dateFilter.value = "all";
+  state.selected.clear();
+  renderTable();
+});
+els.auditButton.addEventListener("click", () => { renderAuditLog(); els.auditDialog.showModal(); });
+els.closeAuditButton.addEventListener("click", () => els.auditDialog.close());
+els.closeDetailsButton.addEventListener("click", () => els.detailsDialog.close());
+els.exportAuditCsvButton.addEventListener("click", exportAuditCsv);
+els.exportAuditJsonButton.addEventListener("click", exportAuditJson);
 els.reasonInput.addEventListener("input", () => { els.reasonCount.textContent = els.reasonInput.value.length; });
 
 $$('.nav-item').forEach((button) => button.addEventListener("click", () => {
@@ -307,12 +438,24 @@ els.requestRows.addEventListener("change", (event) => {
 });
 
 els.requestRows.addEventListener("click", (event) => {
-  const link = event.target.closest("a[data-external]");
-  if (link) { event.preventDefault(); window.hfDesk.openExternal(link.href); return; }
+  if (event.target.closest("a[data-external]")) return;
+  const detailsButton = event.target.closest("[data-details]");
+  if (detailsButton) {
+    const request = state.data.requests.find((item) => item.id === detailsButton.dataset.details);
+    if (request) openRequestDetails(request);
+    return;
+  }
   const button = event.target.closest("[data-action]");
   if (!button) return;
   const request = state.data.requests.find((item) => item.id === button.dataset.id);
   if (request) openConfirm(button.dataset.action, [request]);
+});
+
+document.addEventListener("click", (event) => {
+  const link = event.target.closest("a[data-external]");
+  if (!link) return;
+  event.preventDefault();
+  window.hfDesk.openExternal(link.href).catch((error) => toast(friendlyError(error), "error"));
 });
 
 els.bulkBar.addEventListener("click", (event) => {
@@ -337,6 +480,16 @@ async function start() {
     if (!state.hasToken) return showSetup(false);
     showApp();
     await loadOverview();
+    const demoParams = new URLSearchParams(window.location.search);
+    if (demoParams.get("demo") === "dashboard") {
+      const requestId = demoParams.get("details");
+      const request = requestId && state.data.requests.find((item) => item.id === requestId);
+      if (request) openRequestDetails(request);
+      if (demoParams.get("audit") === "1") {
+        renderAuditLog();
+        els.auditDialog.showModal();
+      }
+    }
   } catch (error) {
     showSetup(false);
     els.tokenError.textContent = friendlyError(error);

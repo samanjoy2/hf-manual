@@ -18,15 +18,19 @@ function credentialPath() {
   return path.join(app.getPath("userData"), "credential.json");
 }
 
-async function encryptToken(token) {
-  if (typeof safeStorage.encryptStringAsync === "function") {
-    return safeStorage.encryptStringAsync(token);
-  }
-  if (!safeStorage.isEncryptionAvailable()) throw new Error("Secure credential storage is unavailable on this computer.");
-  return safeStorage.encryptString(token);
+function auditLogPath() {
+  return path.join(app.getPath("userData"), "audit-log.json");
 }
 
-async function decryptToken(buffer) {
+async function encryptText(value) {
+  if (typeof safeStorage.encryptStringAsync === "function") {
+    return safeStorage.encryptStringAsync(value);
+  }
+  if (!safeStorage.isEncryptionAvailable()) throw new Error("Secure credential storage is unavailable on this computer.");
+  return safeStorage.encryptString(value);
+}
+
+async function decryptText(buffer) {
   if (typeof safeStorage.decryptStringAsync === "function") {
     const decrypted = await safeStorage.decryptStringAsync(buffer);
     return typeof decrypted === "string" ? decrypted : decrypted.result;
@@ -39,7 +43,7 @@ async function loadToken() {
   try {
     const saved = JSON.parse(await readFile(credentialPath(), "utf8"));
     if (saved.version !== 1 || typeof saved.encrypted !== "string") return null;
-    tokenCache = await decryptToken(Buffer.from(saved.encrypted, "base64"));
+    tokenCache = await decryptText(Buffer.from(saved.encrypted, "base64"));
     return tokenCache || null;
   } catch (error) {
     if (error.code === "ENOENT") return null;
@@ -49,7 +53,7 @@ async function loadToken() {
 }
 
 async function saveToken(token) {
-  const encrypted = await encryptToken(token);
+  const encrypted = await encryptText(token);
   const file = credentialPath();
   const temporary = `${file}.tmp`;
   await mkdir(path.dirname(file), { recursive: true });
@@ -63,6 +67,52 @@ async function forgetToken() {
   tokenCache = null;
   overviewCache = null;
   try { await unlink(credentialPath()); } catch (error) { if (error.code !== "ENOENT") throw error; }
+}
+
+function normalizeAuditEntry(entry) {
+  const action = String(entry?.action || "");
+  if (!["accepted", "rejected", "pending", "reset"].includes(action)) return null;
+  const repoId = String(entry?.repoId || "").slice(0, 300);
+  const username = String(entry?.username || "").slice(0, 200);
+  if (!repoId || !username) return null;
+  return {
+    id: String(entry?.id || "").slice(0, 200),
+    timestamp: String(entry?.timestamp || ""),
+    action,
+    previousStatus: ["pending", "accepted", "rejected"].includes(entry?.previousStatus) ? entry.previousStatus : "",
+    repoId,
+    username,
+    reason: String(entry?.reason || "").slice(0, 200),
+  };
+}
+
+async function loadAuditLog() {
+  try {
+    const saved = JSON.parse(await readFile(auditLogPath(), "utf8"));
+    if (saved.version !== 1 || typeof saved.encrypted !== "string") return [];
+    const text = await decryptText(Buffer.from(saved.encrypted, "base64"));
+    const payload = JSON.parse(text);
+    return (Array.isArray(payload.entries) ? payload.entries : []).map(normalizeAuditEntry).filter(Boolean).slice(0, 5000);
+  } catch (error) {
+    if (error.code === "ENOENT") return [];
+    console.error("Could not read the local audit log:", error.message);
+    return [];
+  }
+}
+
+async function saveAuditLog(entries) {
+  const encrypted = await encryptText(JSON.stringify({ entries: entries.slice(0, 5000) }));
+  const file = auditLogPath();
+  const temporary = `${file}.tmp`;
+  await mkdir(path.dirname(file), { recursive: true });
+  await writeFile(temporary, JSON.stringify({ version: 1, encrypted: encrypted.toString("base64") }), { mode: 0o600 });
+  await rename(temporary, file);
+}
+
+async function appendAuditEntries(entries) {
+  if (!entries.length) return;
+  const existing = await loadAuditLog();
+  await saveAuditLog([...entries, ...existing]);
 }
 
 function assertTrusted(event) {
@@ -251,19 +301,37 @@ async function updateRequests(body) {
   const results = await mapLimit(items, 5, async (item) => {
     const repoId = String(item.repoId || "").trim();
     const username = String(item.username || "").trim();
-    if (!/^[^/]+\/[^/]+$/.test(repoId) || !username) return { repoId, username, ok: false, error: "Invalid dataset or username." };
+    const previousStatus = ["pending", "accepted", "rejected"].includes(item.status) ? item.status : "";
+    if (!/^[^/]+\/[^/]+$/.test(repoId) || !username) return { repoId, username, previousStatus, ok: false, error: "Invalid dataset or username." };
     const payload = { status: action, user: username };
     if (action === "rejected" && reason) payload.rejectionReason = reason;
     if (action === "reset" && reason) payload.resetReason = reason;
     try {
       await hubFetch(`/api/datasets/${encodeRepo(repoId)}/user-access-request/handle`, token, { method: "POST", body: JSON.stringify(payload) });
-      return { repoId, username, ok: true };
+      return { repoId, username, previousStatus, ok: true };
     } catch (error) {
-      return { repoId, username, ok: false, error: error.message, code: error.status };
+      return { repoId, username, previousStatus, ok: false, error: error.message, code: error.status };
     }
   });
+  let auditWarning = "";
+  const timestamp = new Date().toISOString();
+  const successfulEntries = results.filter((item) => item.ok).map((item, index) => ({
+    id: `${Date.now()}-${index}-${item.repoId}-${item.username}`,
+    timestamp,
+    action,
+    previousStatus: item.previousStatus,
+    repoId: item.repoId,
+    username: item.username,
+    reason,
+  }));
+  try {
+    await appendAuditEntries(successfulEntries);
+  } catch (error) {
+    auditWarning = "The request was updated, but the local audit log could not be saved.";
+    console.error("Could not update the local audit log:", error.message);
+  }
   overviewCache = null;
-  return { results, succeeded: results.filter((item) => item.ok).length, failed: results.filter((item) => !item.ok).length };
+  return { results, succeeded: results.filter((item) => item.ok).length, failed: results.filter((item) => !item.ok).length, auditWarning };
 }
 
 function registerIpc() {
@@ -282,6 +350,7 @@ function registerIpc() {
   ipcMain.handle("credential:forget", async (event) => { assertTrusted(event); await forgetToken(); return { forgotten: true }; });
   ipcMain.handle("hub:overview", async (event, force) => { assertTrusted(event); return buildOverview(Boolean(force)); });
   ipcMain.handle("hub:update-requests", async (event, body) => { assertTrusted(event); return updateRequests(body); });
+  ipcMain.handle("audit:list", async (event) => { assertTrusted(event); return loadAuditLog(); });
   ipcMain.handle("app:open-external", async (event, url) => {
     assertTrusted(event);
     if (!allowedExternalUrl(url)) throw new Error("This link is not allowed.");

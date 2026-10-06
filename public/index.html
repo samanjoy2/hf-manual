@@ -76,6 +76,7 @@
           </div>
           <div class="topbar-actions">
             <span id="lastUpdated" class="last-updated"></span>
+            <button id="auditButton" class="button secondary compact-button" type="button">Audit log</button>
             <button id="refreshButton" class="icon-button" title="Refresh from Hugging Face" aria-label="Refresh from Hugging Face">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6v5h-5M4 18v-5h5M18.5 9A7 7 0 0 0 6.2 6.2L4 8m16 8-2.2 1.8A7 7 0 0 1 5.5 15"/></svg>
             </button>
@@ -107,6 +108,25 @@
               </div>
               <select id="datasetFilter" aria-label="Filter by dataset"><option value="all">All datasets</option></select>
               <button id="exportButton" class="button secondary">Export CSV</button>
+            </div>
+
+            <div class="filter-toolbar" aria-label="Advanced request filters">
+              <label class="filter-control" for="sortSelect"><span>Sort</span><select id="sortSelect">
+                <option value="newest">Newest first</option>
+                <option value="oldest">Oldest first</option>
+                <option value="requester">Requester A–Z</option>
+                <option value="dataset">Dataset A–Z</option>
+                <option value="status">Status</option>
+              </select></label>
+              <label class="filter-control" for="dateFilter"><span>Requested</span><select id="dateFilter">
+                <option value="all">Any time</option>
+                <option value="7">Last 7 days</option>
+                <option value="30">Last 30 days</option>
+                <option value="90">Last 90 days</option>
+                <option value="365">Last year</option>
+              </select></label>
+              <button id="clearFiltersButton" class="text-action" type="button">Clear filters</button>
+              <span id="resultCount" class="result-count"></span>
             </div>
 
             <div id="bulkBar" class="bulk-bar hidden">
@@ -161,6 +181,36 @@
           <button id="confirmAction" class="button primary" value="confirm">Confirm</button>
         </div>
       </form>
+    </dialog>
+
+    <dialog id="detailsDialog" class="detail-drawer">
+      <div class="drawer-shell">
+        <button id="closeDetailsButton" class="dialog-close" type="button" aria-label="Close request details">×</button>
+        <p class="eyebrow">Request details</p>
+        <h2 id="detailsTitle">Requester</h2>
+        <div id="detailsBody" class="details-body"></div>
+      </div>
+    </dialog>
+
+    <dialog id="auditDialog" class="audit-dialog">
+      <div class="audit-shell">
+        <button id="closeAuditButton" class="dialog-close" type="button" aria-label="Close audit log">×</button>
+        <div class="audit-heading">
+          <div><p class="eyebrow">Stored securely on this PC</p><h2>Local audit log</h2></div>
+          <div class="audit-actions">
+            <button id="exportAuditCsvButton" class="button secondary" type="button">Export CSV</button>
+            <button id="exportAuditJsonButton" class="button secondary" type="button">Export JSON</button>
+          </div>
+        </div>
+        <p class="muted audit-copy">Successful decisions are encrypted with Windows protected storage and retained through app upgrades.</p>
+        <div class="audit-table-wrap">
+          <table>
+            <thead><tr><th>When</th><th>Requester</th><th>Dataset</th><th>Decision</th><th>Reason</th></tr></thead>
+            <tbody id="auditRows"></tbody>
+          </table>
+          <div id="auditEmpty" class="empty-state hidden"><div class="empty-icon">✓</div><h2>No decisions recorded</h2><p>Successful actions taken in this app will appear here.</p></div>
+        </div>
+      </div>
     </dialog>
 
     <div id="toastRegion" class="toast-region" aria-live="polite"></div>
