@@ -52,8 +52,9 @@
     cached: false,
   };
 
-  let preferences = { refreshMinutes: 5, notifications: true, checkUpdates: true };
-  const updateStatus = { status: "current", currentVersion: "1.3.0", message: "Version 1.3.0 is up to date." };
+  let preferences = { theme: "dark", refreshMinutes: 5, notifications: true, checkUpdates: true };
+  try { preferences = { ...preferences, ...JSON.parse(localStorage.getItem("hf-access-desk:demo-settings") || "{}") }; } catch { /* Use defaults. */ }
+  const updateStatus = { status: "current", currentVersion: "1.3.1", message: "Version 1.3.1 is up to date." };
   window.hfDesk = Object.freeze({
     getCredentialStatus: async () => ({ hasToken: demoView !== "setup" }),
     saveCredential: async () => ({ saved: true, username: "Demo Workspace" }),
@@ -62,7 +63,11 @@
     updateRequests: async ({ items = [] }) => ({ results: [], succeeded: items.length, failed: 0 }),
     getAuditLog: async () => auditLog,
     getSettings: async () => preferences,
-    saveSettings: async (value) => (preferences = value),
+    saveSettings: async (value) => {
+      preferences = value;
+      localStorage.setItem("hf-access-desk:demo-settings", JSON.stringify(value));
+      return preferences;
+    },
     getUpdateStatus: async () => updateStatus,
     checkUpdates: async () => updateStatus,
     downloadUpdate: async () => updateStatus,

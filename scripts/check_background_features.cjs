@@ -105,6 +105,9 @@ test("main-process IPC persists preferences, polls, and emits private notificati
   const timers = new Map();
   const notifications = [];
   const sent = [];
+  const backgrounds = [];
+  // Existing settings from before theme support must migrate to dark.
+  await writeFile(path.join(directory, "settings.json"), JSON.stringify({ refreshMinutes: 5, notifications: true, checkUpdates: true }));
   let pending = [{ username: "existing", time: "2026-10-07T01:00:00Z" }];
   let failPending = false;
   let ready;
@@ -115,11 +118,13 @@ test("main-process IPC persists preferences, polls, and emits private notificati
     whenReady: () => ({ then: (callback) => { ready = callback(); } }),
   });
   class Window extends EventEmitter {
-    constructor() {
+    constructor(options) {
       super();
+      backgrounds.push(options.backgroundColor);
       this.webContents = Object.assign(new EventEmitter(), { send: (channel, value) => sent.push({ channel, value }), setWindowOpenHandler() {} });
     }
     loadFile() {} show() {} focus() {} isDestroyed() { return false; } isMinimized() { return false; }
+    setBackgroundColor(color) { backgrounds.push(color); }
   }
   Window.getAllWindows = () => [1];
   class NativeNotification extends EventEmitter {
@@ -127,8 +132,10 @@ test("main-process IPC persists preferences, polls, and emits private notificati
     static isSupported() { return true; }
     show() {}
   }
+  const nativeTheme = new EventEmitter();
+  Object.defineProperty(nativeTheme, "shouldUseDarkColors", { get: () => nativeTheme.themeSource !== "light" });
   const electron = {
-    app, BrowserWindow: Window, Notification: NativeNotification,
+    app, BrowserWindow: Window, Notification: NativeNotification, nativeTheme,
     ipcMain: { handle: (channel, callback) => handlers.set(channel, callback) },
     safeStorage: { isEncryptionAvailable: () => true, encryptString: (text) => Buffer.from(text), decryptString: (value) => value.toString() },
     shell: { openExternal: async () => {} }, session: { defaultSession: { setPermissionRequestHandler() {} } },
@@ -149,6 +156,9 @@ test("main-process IPC persists preferences, polls, and emits private notificati
   await ready;
   const event = { senderFrame: { url: pathToFileURL(path.join(root, "public", "index.html")).href } };
   const call = (channel, ...args) => handlers.get(channel)(event, ...args);
+  assert.equal(call("settings:get").theme, "dark");
+  assert.equal(nativeTheme.themeSource, "dark");
+  assert.equal(backgrounds.at(-1), "#11151c");
   await call("credential:save", "hf_" + "A".repeat(30));
   await call("hub:overview", true);
   assert.equal(notifications.length, 0);
@@ -165,12 +175,19 @@ test("main-process IPC persists preferences, polls, and emits private notificati
   failPending = false;
   await timers.get(5 * 60_000)();
   assert.equal(notifications.length, 1);
-  await call("settings:save", { refreshMinutes: 0, notifications: false, checkUpdates: false });
+  await call("settings:save", { theme: "light", refreshMinutes: 0, notifications: false, checkUpdates: false });
   assert.equal(timers.size, 0);
   const saved = JSON.parse(await readFile(path.join(directory, "settings.json"), "utf8"));
   assert.equal(saved.refreshMinutes, 0);
+  assert.equal(saved.theme, "light");
+  assert.equal(nativeTheme.themeSource, "light");
+  assert.equal(backgrounds.at(-1), "#ffffff");
   pending.push({ username: "silent-new", time: "2026-10-07T03:00:00Z" });
   await call("hub:overview", true);
   assert.equal(notifications.length, 1);
+  await call("settings:save", { ...saved, theme: "system" });
+  assert.equal(nativeTheme.themeSource, "system");
+  await call("settings:save", { ...saved, theme: "invalid" });
+  assert.equal(call("settings:get").theme, "dark");
   assert.throws(() => handlers.get("settings:get")({ senderFrame: { url: "https://example.com" } }), /Untrusted/);
 });

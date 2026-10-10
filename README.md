@@ -9,8 +9,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/samanjoy2/hf-manual/releases/tag/v1.3.0"><img alt="Release v1.3.0" src="https://img.shields.io/badge/release-v1.3.0-344960?style=flat-square" /></a>
-  <a href="https://github.com/samanjoy2/hf-manual/releases/tag/v1.3.0"><img alt="Download Windows installer" src="https://img.shields.io/badge/download-Windows_x64-344960?style=flat-square&logo=github" /></a>
+  <a href="https://github.com/samanjoy2/hf-manual/releases/tag/v1.3.1"><img alt="Release v1.3.1" src="https://img.shields.io/badge/release-v1.3.1-344960?style=flat-square" /></a>
+  <a href="https://github.com/samanjoy2/hf-manual/releases/tag/v1.3.1"><img alt="Download Windows installer" src="https://img.shields.io/badge/download-Windows_x64-344960?style=flat-square&logo=github" /></a>
   <img alt="Windows" src="https://img.shields.io/badge/Windows-10%2B-1f4d3b?style=flat-square&logo=windows" />
   <img alt="Electron" src="https://img.shields.io/badge/Electron-desktop-1f4d3b?style=flat-square&logo=electron" />
 </p>
@@ -52,10 +52,13 @@ HF Access Desk brings pending, accepted, and rejected requests from all the gate
 - Collapse the navigation sidebar to leave more room for large request queues; the preference is remembered locally.
 - Use **Ctrl+K** to search and **Ctrl+B** to collapse or expand navigation.
 - Replace or forget the saved token from inside the app.
+- Start in dark mode by default, or choose Light or Follow Windows in **Settings & updates → Appearance**. Your choice is remembered.
 
 ## A look inside
 
 The v1.3 interface follows the compact navigation and data-table patterns in [shadcn/ui](https://ui.shadcn.com/docs/components/sidebar), [Kibo UI](https://www.kibo-ui.com/components/table), and the consistent controls in [HeroUI](https://www.heroui.com/). These patterns are adapted to the app's native HTML/CSS renderer; no React library or paid template is bundled. Motion is limited to short panel transitions and respects the Windows reduced-motion preference.
+
+Dark mode is the default from v1.3.1 onward, including when upgrading from earlier versions. The token setup, review queue, details drawer, audit log, settings, and native window all follow the selected theme. Choose **Follow Windows** to adapt automatically when Windows switches between light and dark.
 
 | Secure first-run setup | One combined review queue |
 | --- | --- |

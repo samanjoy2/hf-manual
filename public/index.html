@@ -1,13 +1,14 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="color-scheme" content="light" />
-    <meta name="theme-color" content="#ffffff" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="theme-color" content="#11151c" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https://huggingface.co https://cdn-avatars.huggingface.co; style-src 'self'; script-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; object-src 'none'" />
     <title>HF Access Desk</title>
     <meta name="description" content="Review gated Hugging Face dataset access requests in one place." />
+    <script src="./theme.js"></script>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
@@ -230,6 +231,10 @@
         <button id="closeSettingsButton" class="dialog-close" type="button" aria-label="Close settings">×</button>
         <p class="eyebrow">Workspace preferences</p><h2 id="settingsTitle">Settings &amp; updates</h2>
         <form id="settingsForm">
+          <section class="settings-section">
+            <h3>Appearance</h3>
+            <label class="settings-row" for="themeSelect"><span>Color theme</span><select id="themeSelect"><option value="dark">Dark (default)</option><option value="light">Light</option><option value="system">Follow Windows</option></select></label>
+          </section>
           <section class="settings-section">
             <h3>Request monitoring</h3>
             <label class="settings-row" for="refreshInterval"><span>Refresh requests automatically</span><select id="refreshInterval"><option value="0">Off</option><option value="1">Every minute</option><option value="5">Every 5 minutes</option><option value="15">Every 15 minutes</option><option value="30">Every 30 minutes</option></select></label>

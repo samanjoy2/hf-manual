@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.3.1 — 2026-10-10
+
+- Made dark mode the default for new and existing installations.
+- Added Dark, Light, and Follow Windows appearance settings, persisted across restarts and updates.
+- Applied shared theme colors to every screen, dialog, table, form control, and native window background.
+- Applied the saved theme before the interface appears to avoid a bright startup flash.
+- Added checks for legacy-settings migration, theme persistence, and live system-appearance changes.
+- Refreshed all privacy-safe README screenshots in the default dark theme.
+
 ## 1.3.0 — 2026-10-10
 
 - Redesigned the interface with a neutral desktop palette, system typography, compact summary counts, and consistent controls.

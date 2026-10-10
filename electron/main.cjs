@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, safeStorage, shell, session, Notification } = require("electron");
+const { app, BrowserWindow, ipcMain, safeStorage, shell, session, Notification, nativeTheme } = require("electron");
 const { spawn } = require("node:child_process");
 const { mkdir, readFile, rename, unlink, writeFile } = require("node:fs/promises");
 const path = require("node:path");
@@ -18,7 +18,7 @@ let overviewCache = null;
 let tokenCache = null;
 let credentialGeneration = 0;
 let overviewInFlight = null;
-let settings = { refreshMinutes: 5, notifications: true, checkUpdates: true };
+let settings = { theme: "dark", refreshMinutes: 5, notifications: true, checkUpdates: true };
 let refreshTimer;
 let updateTimer;
 let updateService;
@@ -32,6 +32,7 @@ function sendToRenderer(channel, value) {
 
 function normalizeSettings(value) {
   return {
+    theme: ["dark", "light", "system"].includes(value?.theme) ? value.theme : "dark",
     refreshMinutes: [0, 1, 5, 15, 30].includes(value?.refreshMinutes) ? value.refreshMinutes : 5,
     notifications: typeof value?.notifications === "boolean" ? value.notifications : true,
     checkUpdates: typeof value?.checkUpdates === "boolean" ? value.checkUpdates : true,
@@ -41,6 +42,11 @@ function normalizeSettings(value) {
 async function loadSettings() {
   try { settings = normalizeSettings(JSON.parse(await readFile(path.join(app.getPath("userData"), "settings.json"), "utf8"))); }
   catch { /* First run uses the defaults. */ }
+}
+
+function applyNativeTheme() {
+  nativeTheme.themeSource = settings.theme;
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setBackgroundColor(nativeTheme.shouldUseDarkColors ? "#11151c" : "#ffffff");
 }
 
 function showRequestNotification(count) {
@@ -458,6 +464,7 @@ function registerIpc() {
     await writeFile(`${file}.tmp`, JSON.stringify(next));
     await rename(`${file}.tmp`, file);
     settings = next;
+    applyNativeTheme();
     scheduleBackgroundWork();
     return settings;
   });
@@ -490,7 +497,7 @@ function createWindow() {
     height: 900,
     minWidth: 940,
     minHeight: 640,
-    backgroundColor: "#ffffff",
+    backgroundColor: nativeTheme.shouldUseDarkColors ? "#11151c" : "#ffffff",
     title: "HF Access Desk",
     autoHideMenuBar: true,
     show: false,
@@ -524,6 +531,10 @@ app.on("second-instance", () => {
 app.whenReady().then(async () => {
   app.setAppUserModelId("com.samanjoy.hfaccessdesk");
   await loadSettings();
+  applyNativeTheme();
+  nativeTheme.on("updated", () => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setBackgroundColor(nativeTheme.shouldUseDarkColors ? "#11151c" : "#ffffff");
+  });
   updateService = new UpdateService({
     version: app.getVersion(),
     directory: path.join(app.getPath("userData"), "updates"),

@@ -72,6 +72,7 @@ async function main() {
       const $ = (selector) => document.querySelector(selector);
       const change = (selector, value) => { $(selector).value = value; $(selector).dispatchEvent(new Event('change', { bubbles: true })); };
       const ids = [...document.querySelectorAll('[id]')].map(node => node.id);
+      assert(document.documentElement.dataset.theme === 'dark', 'Dark mode is the default');
       assert(new Set(ids).size === ids.length, 'Duplicate element IDs');
       assert($('#requestRows').children.length === 4, 'Pending rows');
       $('.nav-item[data-status="accepted"]').click();
@@ -98,6 +99,7 @@ async function main() {
       $('#settingsButton').click();
       await new Promise(resolve => setTimeout(resolve, 50));
       assert($('#settingsDialog').open, 'Settings dialog');
+      assert($('#themeSelect').value === 'dark', 'Default theme selection');
       change('#refreshInterval', '15');
       $('#settingsForm button[type="submit"]').click();
       await new Promise(resolve => setTimeout(resolve, 50));
@@ -111,6 +113,35 @@ async function main() {
       return 'Navigation, filters, drawer actions, dialogs, settings, shortcuts, and collapse passed';
     })()`);
     console.log(basics);
+    const themes = await evaluate(`(async () => {
+      const assert = (condition, message) => { if (!condition) throw new Error(message); };
+      const $ = selector => document.querySelector(selector);
+      $('#settingsButton').click();
+      await new Promise(resolve => setTimeout(resolve, 30));
+      $('#themeSelect').value = 'light';
+      $('#settingsForm button[type="submit"]').click();
+      await new Promise(resolve => setTimeout(resolve, 30));
+      assert(document.documentElement.dataset.theme === 'light', 'Light mode applies');
+      assert(localStorage.getItem('hf-access-desk:theme') === 'light', 'Theme cached before next paint');
+      $('#closeSettingsButton').click();
+      $('#settingsButton').click();
+      await new Promise(resolve => setTimeout(resolve, 30));
+      assert($('#themeSelect').value === 'light', 'Saved light theme retained');
+      $('#themeSelect').value = 'system';
+      $('#settingsForm button[type="submit"]').click();
+      await new Promise(resolve => setTimeout(resolve, 30));
+      return 'Saved light mode and system preference passed';
+    })()`);
+    console.log(themes);
+    for (const theme of ['dark', 'light']) {
+      await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: theme }] });
+      await until(() => evaluate(`document.documentElement.dataset.theme === '${theme}'`), 'System theme did not update');
+    }
+    await evaluate(`document.querySelector('#themeSelect').value = 'dark'; document.querySelector('#settingsForm button[type="submit"]').click();`);
+    await until(() => evaluate(`window.hfAppearance.getTheme() === 'dark'`), 'Dark mode was not saved');
+    await navigate("demo=dashboard");
+    if (!(await evaluate(`document.documentElement.dataset.theme === 'dark'`))) throw new Error('Theme did not persist across reload');
+    console.log('System appearance changes and dark-mode persistence across reload passed');
     await navigate("demo=dashboard&rows=65");
     const pagination = await evaluate(`(async () => {
       const assert = (condition, message) => { if (!condition) throw new Error(message); };

@@ -1,6 +1,6 @@
 {
   "name": "hf-access-desk",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "private": true,
   "description": "A secure Electron desktop app for managing gated Hugging Face dataset access requests.",
   "main": "electron/main.cjs",
@@ -13,7 +13,7 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron .",
-    "check": "node --check electron/main.cjs && node --check electron/preload.cjs && node --check electron/updates.cjs && node --check electron/request-monitor.cjs && node --check public/app.js && node --check public/demo.js && node scripts/check_external_links.cjs && node --test scripts/check_background_features.cjs",
+    "check": "node --check electron/main.cjs && node --check electron/preload.cjs && node --check electron/updates.cjs && node --check electron/request-monitor.cjs && node --check public/theme.js && node --check public/app.js && node --check public/demo.js && node scripts/check_external_links.cjs && node --test scripts/check_background_features.cjs",
     "build:icon": "python scripts/generate_icon.py",
     "screenshots": "node scripts/capture_screenshots.cjs",
     "check:ui": "node scripts/check_interface.cjs",

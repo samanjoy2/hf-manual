@@ -31,7 +31,7 @@ const els = {
   auditDialog: $("#auditDialog"), auditRows: $("#auditRows"), auditEmpty: $("#auditEmpty"), closeAuditButton: $("#closeAuditButton"), exportAuditCsvButton: $("#exportAuditCsvButton"), exportAuditJsonButton: $("#exportAuditJsonButton"),
   settingsDialog: $("#settingsDialog"), settingsButton: $("#settingsButton"), setupSettingsButton: $("#setupSettingsButton"), closeSettingsButton: $("#closeSettingsButton"), settingsForm: $("#settingsForm"), refreshInterval: $("#refreshInterval"), notificationsToggle: $("#notificationsToggle"), updatesToggle: $("#updatesToggle"), settingsSaved: $("#settingsSaved"),
   checkUpdateButton: $("#checkUpdateButton"), downloadUpdateButton: $("#downloadUpdateButton"), installUpdateButton: $("#installUpdateButton"), installedVersion: $("#installedVersion"), updateStatusText: $("#updateStatusText"), updateProgress: $("#updateProgress"), updateBanner: $("#updateBanner"), updateBannerText: $("#updateBannerText"), updateBannerButton: $("#updateBannerButton"),
-  queueCount: $("#queueCount"), pageDescription: $("#pageDescription"), emptyTitle: $("#emptyTitle"), emptyDescription: $("#emptyDescription"), pageSizeSelect: $("#pageSizeSelect"), pageInfo: $("#pageInfo"), previousPageButton: $("#previousPageButton"), nextPageButton: $("#nextPageButton"), detailsActions: $("#detailsActions"),
+  queueCount: $("#queueCount"), pageDescription: $("#pageDescription"), emptyTitle: $("#emptyTitle"), emptyDescription: $("#emptyDescription"), pageSizeSelect: $("#pageSizeSelect"), pageInfo: $("#pageInfo"), previousPageButton: $("#previousPageButton"), nextPageButton: $("#nextPageButton"), detailsActions: $("#detailsActions"), themeSelect: $("#themeSelect"),
 };
 
 const ICON_PATHS = {
@@ -578,6 +578,7 @@ function renderUpdateStatus(update) {
 async function openSettings() {
   try {
     const preferences = await window.hfDesk.getSettings();
+    els.themeSelect.value = preferences.theme || "dark";
     els.refreshInterval.value = String(preferences.refreshMinutes);
     els.notificationsToggle.checked = preferences.notifications;
     els.updatesToggle.checked = preferences.checkUpdates;
@@ -596,7 +597,8 @@ els.settingsForm.addEventListener("submit", async (event) => {
   const button = event.submitter;
   button.disabled = true;
   try {
-    await window.hfDesk.saveSettings({ refreshMinutes: Number(els.refreshInterval.value), notifications: els.notificationsToggle.checked, checkUpdates: els.updatesToggle.checked });
+    const saved = await window.hfDesk.saveSettings({ theme: els.themeSelect.value, refreshMinutes: Number(els.refreshInterval.value), notifications: els.notificationsToggle.checked, checkUpdates: els.updatesToggle.checked });
+    window.hfAppearance.setTheme(saved.theme);
     els.settingsSaved.textContent = "Preferences saved";
   } catch (error) { toast(friendlyError(error), "error"); }
   finally { button.disabled = false; }
@@ -625,6 +627,7 @@ async function start() {
     return showSetup(false);
   }
   try {
+    window.hfAppearance.setTheme((await window.hfDesk.getSettings()).theme);
     window.hfDesk.onUpdateStatus(renderUpdateStatus);
     window.hfDesk.onOverview((overview) => {
       if (!state.hasToken) return;
