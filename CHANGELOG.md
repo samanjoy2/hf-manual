@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.3.0 — 2026-10-10
+
+- Redesigned the interface with a neutral desktop palette, system typography, compact summary counts, and consistent controls.
+- Grouped access-request navigation, audit history, and settings in the sidebar.
+- Improved request-table hierarchy with dataset names and namespaces, status icons, clearer decisions, and explicit details buttons.
+- Added pagination with 10, 25, 50, or 100 rows per page and selections preserved across pages. CSV export still includes all filtered requests.
+- Added approve/reject controls to the request-details drawer, a fixed decision footer, and readable form labels.
+- Added Ctrl+K to search and Ctrl+B to toggle the sidebar, reduced-motion support, and accurate empty states.
+- Added browser interaction checks for navigation, filtering, pagination, selection, exports, dialogs, and responsive layouts.
+- Updated every README screenshot using fictional data.
+
 ## 1.2.0 — 2026-10-07
 
 - Added automatic request refresh with configurable 1-, 5-, 15-, or 30-minute intervals.

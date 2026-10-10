@@ -9,8 +9,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/samanjoy2/hf-manual/releases/tag/v1.2.0"><img alt="Release v1.2.0" src="https://img.shields.io/badge/release-v1.2.0-1f4d3b?style=flat-square" /></a>
-  <a href="https://github.com/samanjoy2/hf-manual/releases/tag/v1.2.0"><img alt="Download Windows installer" src="https://img.shields.io/badge/download-Windows_x64-d89520?style=flat-square&logo=github" /></a>
+  <a href="https://github.com/samanjoy2/hf-manual/releases/tag/v1.3.0"><img alt="Release v1.3.0" src="https://img.shields.io/badge/release-v1.3.0-344960?style=flat-square" /></a>
+  <a href="https://github.com/samanjoy2/hf-manual/releases/tag/v1.3.0"><img alt="Download Windows installer" src="https://img.shields.io/badge/download-Windows_x64-344960?style=flat-square&logo=github" /></a>
   <img alt="Windows" src="https://img.shields.io/badge/Windows-10%2B-1f4d3b?style=flat-square&logo=windows" />
   <img alt="Electron" src="https://img.shields.io/badge/Electron-desktop-1f4d3b?style=flat-square&logo=electron" />
 </p>
@@ -38,8 +38,10 @@ HF Access Desk brings pending, accepted, and rejected requests from all the gate
 - Review pending, accepted, rejected, or all requests in one consistent table.
 - Approve, reject, revoke, reset, or return a request to pending.
 - Select many requests and make one bulk decision.
+- Page through large queues with 10, 25, 50, or 100 rows per page, keeping your selection across pages.
 - Search by requester or dataset, narrow the queue by dataset and request date, and sort the results five ways.
 - Open a request-details drawer to inspect submitted form answers without leaving the queue.
+- Approve or reject directly from the details drawer after reading the submitted answers.
 - See a requester's history across all connected datasets from the same details view.
 - Export the current request list as CSV.
 - Keep an encrypted local audit trail of successful decisions and export it as CSV or JSON.
@@ -48,9 +50,12 @@ HF Access Desk brings pending, accepted, and rejected requests from all the gate
 - Check for new GitHub releases, download a verified update, and choose when to install it.
 - Open a requester's Hugging Face profile by clicking their handle, or search their email with Google in your default browser.
 - Collapse the navigation sidebar to leave more room for large request queues; the preference is remembered locally.
+- Use **Ctrl+K** to search and **Ctrl+B** to collapse or expand navigation.
 - Replace or forget the saved token from inside the app.
 
 ## A look inside
+
+The v1.3 interface follows the compact navigation and data-table patterns in [shadcn/ui](https://ui.shadcn.com/docs/components/sidebar), [Kibo UI](https://www.kibo-ui.com/components/table), and the consistent controls in [HeroUI](https://www.heroui.com/). These patterns are adapted to the app's native HTML/CSS renderer; no React library or paid template is bundled. Motion is limited to short panel transitions and respects the Windows reduced-motion preference.
 
 | Secure first-run setup | One combined review queue |
 | --- | --- |
@@ -85,7 +90,7 @@ HF Access Desk currently ships as a Windows x64 installer.
 
 The installer handles both situations automatically: it performs a clean installation when the app is not present, or upgrades the existing installation in place when an older version is detected. The encrypted token and application data are preserved during upgrades.
 
-Starting with v1.2.0, open **Settings & updates** using the sliders button. The installed app checks for stable GitHub releases at startup and every six hours. Choose **Download update**, then **Install and restart** to run the normal installer. Downloads are verified against the release's SHA-256 checksum, including a second check before installation. Updates are never installed without your action. Earlier versions need one manual upgrade to v1.2.0 to gain this feature.
+Open **Settings & updates** from the sidebar. The installed app checks for stable GitHub releases at startup and every six hours. Choose **Download update**, then **Install and restart** to run the normal installer. Downloads are verified against the release's SHA-256 checksum, including a second check before installation. Updates are never installed without your action. Versions earlier than v1.2.0 need one manual upgrade to gain this feature.
 
 Requests refresh every five minutes by default. Change the interval or turn it off in **Settings & updates**. Monitoring works while the app is open, including when minimized; closing the app stops it. The first complete refresh establishes a baseline without announcing old requests. Later new pending requests generate one notification containing a count, without names, handles, or emails. Click it to open the pending queue. Windows notifications must be enabled for the app.
 
@@ -139,10 +144,13 @@ Useful development commands:
 ```powershell
 npm run check        # Validate JavaScript syntax
 npm run screenshots  # Rebuild README screenshots from fictional demo data
+npm run check:ui     # Exercise the interface in headless Edge or Chrome
 npm run dist:win     # Build the Windows NSIS installer
 ```
 
 ## How it is put together
+
+The optional browser interface checks require Node.js 22 or newer and Microsoft Edge or Google Chrome. They use only fictional requests and a temporary browser profile.
 
 ```text
 electron/main.cjs       Secure storage, Hugging Face API, app lifecycle

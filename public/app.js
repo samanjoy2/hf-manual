@@ -10,6 +10,8 @@ const state = {
   pendingAction: null,
   hasToken: false,
   update: null,
+  page: 1,
+  pageSize: 25,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -29,7 +31,30 @@ const els = {
   auditDialog: $("#auditDialog"), auditRows: $("#auditRows"), auditEmpty: $("#auditEmpty"), closeAuditButton: $("#closeAuditButton"), exportAuditCsvButton: $("#exportAuditCsvButton"), exportAuditJsonButton: $("#exportAuditJsonButton"),
   settingsDialog: $("#settingsDialog"), settingsButton: $("#settingsButton"), setupSettingsButton: $("#setupSettingsButton"), closeSettingsButton: $("#closeSettingsButton"), settingsForm: $("#settingsForm"), refreshInterval: $("#refreshInterval"), notificationsToggle: $("#notificationsToggle"), updatesToggle: $("#updatesToggle"), settingsSaved: $("#settingsSaved"),
   checkUpdateButton: $("#checkUpdateButton"), downloadUpdateButton: $("#downloadUpdateButton"), installUpdateButton: $("#installUpdateButton"), installedVersion: $("#installedVersion"), updateStatusText: $("#updateStatusText"), updateProgress: $("#updateProgress"), updateBanner: $("#updateBanner"), updateBannerText: $("#updateBannerText"), updateBannerButton: $("#updateBannerButton"),
+  queueCount: $("#queueCount"), pageDescription: $("#pageDescription"), emptyTitle: $("#emptyTitle"), emptyDescription: $("#emptyDescription"), pageSizeSelect: $("#pageSizeSelect"), pageInfo: $("#pageInfo"), previousPageButton: $("#previousPageButton"), nextPageButton: $("#nextPageButton"), detailsActions: $("#detailsActions"),
 };
+
+const ICON_PATHS = {
+  accepted: '<path d="m5 12 4 4L19 6"/>',
+  rejected: '<path d="m6 6 12 12M18 6 6 18"/>',
+  pending: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  reset: '<path d="M3 10a9 9 0 1 1 2 8M3 4v6h6"/>',
+  details: '<path d="m9 5 7 7-7 7"/>',
+  dataset: '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0"/>',
+};
+
+function icon(name) {
+  return `<svg viewBox="0 0 24 24" aria-hidden="true">${ICON_PATHS[name] || ICON_PATHS.details}</svg>`;
+}
+
+function statusPill(status) {
+  return `<span class="status-pill status-${escapeHtml(status)}">${icon(status)}${escapeHtml(status)}</span>`;
+}
+
+function currentPageRequests() {
+  const requests = visibleRequests();
+  return requests.slice((state.page - 1) * state.pageSize, state.page * state.pageSize);
+}
 
 function setSidebarCollapsed(collapsed, persist = true) {
   els.appView.classList.toggle("sidebar-collapsed", collapsed);
@@ -123,9 +148,9 @@ function visibleRequests() {
 
 function actionButtons(request) {
   const data = `data-id="${escapeHtml(request.id)}"`;
-  if (request.status === "pending") return `<button class="row-button danger" data-action="rejected" ${data}>Reject</button><button class="row-button approve" data-action="accepted" ${data}>Approve</button>`;
-  if (request.status === "accepted") return `<button class="row-button" data-action="pending" ${data}>Move to pending</button><button class="row-button danger" data-action="rejected" ${data}>Revoke</button>`;
-  return `<button class="row-button" data-action="reset" ${data}>Reset request</button><button class="row-button approve" data-action="accepted" ${data}>Approve</button>`;
+  if (request.status === "pending") return `<button class="row-button danger" data-action="rejected" ${data}>Reject</button><button class="row-button approve" data-action="accepted" ${data}>${icon("accepted")}Approve</button>`;
+  if (request.status === "accepted") return `<button class="row-button" data-action="pending" ${data}>${icon("pending")}Pending</button><button class="row-button danger" data-action="rejected" ${data}>Revoke</button>`;
+  return `<button class="row-button" data-action="reset" ${data}>${icon("reset")}Reset</button><button class="row-button approve" data-action="accepted" ${data}>${icon("accepted")}Approve</button>`;
 }
 
 function datasetUrl(repoId) {
@@ -141,16 +166,20 @@ function emailSearchUrl(email) {
 }
 
 function renderTable() {
-  const requests = visibleRequests();
+  const filtered = visibleRequests();
+  const pages = Math.max(1, Math.ceil(filtered.length / state.pageSize));
+  state.page = Math.min(state.page, pages);
+  const requests = currentPageRequests();
   els.requestRows.innerHTML = requests.map((request) => {
     const requested = formatDate(request.requestedAt);
-    return `<tr>
+    const [namespace, ...name] = String(request.repoId).split("/");
+    return `<tr class="${state.selected.has(request.id) ? "selected" : ""}">
       <td class="check-cell"><input class="row-check" type="checkbox" aria-label="Select ${escapeHtml(request.username)}" data-id="${escapeHtml(request.id)}" ${state.selected.has(request.id) ? "checked" : ""}></td>
       <td><div class="person"><span class="initial">${escapeHtml(initials(request.fullname || request.username))}</span><div><strong><button class="requester-name" type="button" data-details="${escapeHtml(request.id)}" title="View request details">${escapeHtml(request.fullname || request.username)}</button></strong><span class="person-meta"><a class="person-link" data-external href="${escapeHtml(profileUrl(request.username))}" title="Open @${escapeHtml(request.username)} on Hugging Face">@${escapeHtml(request.username)}</a>${request.email ? ` · <a class="person-link email-link" data-external href="${escapeHtml(emailSearchUrl(request.email))}" title="Search this email with Google">${escapeHtml(request.email)}</a>` : ""}</span></div></div></td>
-      <td><a class="repo-link" data-external href="${escapeHtml(datasetUrl(request.repoId))}">${escapeHtml(request.repoId)}</a></td>
+      <td><a class="repo-link dataset-cell" data-external href="${escapeHtml(datasetUrl(request.repoId))}" title="${escapeHtml(request.repoId)}">${icon("dataset")}<span class="dataset-copy"><strong>${escapeHtml(name.join("/"))}</strong><small>${escapeHtml(namespace)}</small></span></a></td>
       <td><span class="date-primary">${escapeHtml(requested.date)}</span><span class="date-secondary">${escapeHtml(requested.time)}</span></td>
-      <td><span class="status-pill status-${escapeHtml(request.status)}">${escapeHtml(request.status)}</span></td>
-      <td><div class="row-actions">${actionButtons(request)}</div></td>
+      <td>${statusPill(request.status)}</td>
+      <td><div class="row-actions">${actionButtons(request)}<button class="row-button details-button" type="button" data-details="${escapeHtml(request.id)}" title="View request details" aria-label="View details for ${escapeHtml(request.fullname || request.username)}">${icon("details")}</button></div></td>
     </tr>`;
   }).join("");
   els.emptyState.classList.toggle("hidden", requests.length > 0);
@@ -158,7 +187,17 @@ function renderTable() {
   const visibleIds = requests.map((request) => request.id);
   els.selectAll.checked = Boolean(visibleIds.length) && visibleIds.every((id) => state.selected.has(id));
   els.selectAll.indeterminate = visibleIds.some((id) => state.selected.has(id)) && !els.selectAll.checked;
-  els.resultCount.textContent = `${requests.length} shown`;
+  els.selectAll.setAttribute("aria-label", "Select all requests on this page");
+  els.queueCount.textContent = filtered.length;
+  const first = filtered.length ? (state.page - 1) * state.pageSize + 1 : 0;
+  const last = Math.min(state.page * state.pageSize, filtered.length);
+  els.resultCount.textContent = filtered.length ? `Showing ${first}–${last} of ${filtered.length} requests` : "0 requests";
+  els.pageInfo.textContent = `${state.page} of ${pages}`;
+  els.previousPageButton.disabled = state.page === 1;
+  els.nextPageButton.disabled = state.page === pages;
+  const hasFilters = state.query.trim() || state.dataset !== "all" || state.dateRange !== "all";
+  els.emptyTitle.textContent = hasFilters ? "No matching requests" : state.status === "pending" ? "You're all caught up" : "No requests yet";
+  els.emptyDescription.textContent = hasFilters ? "Try a different search or clear your filters." : state.status === "pending" ? "New access requests will appear here when they arrive." : `There are no ${state.status === "all" ? "dataset access" : state.status} requests in this workspace.`;
   renderBulkBar();
 }
 
@@ -169,6 +208,8 @@ function renderBulkBar() {
 
 function renderOverview() {
   const { data } = state;
+  const currentIds = new Set(data.requests.map((request) => request.id));
+  state.selected = new Set([...state.selected].filter((id) => currentIds.has(id)));
   $("#statPending").textContent = data.counts.pending;
   $("#statDatasets").textContent = data.datasets.length;
   $("#statAccepted").textContent = data.counts.accepted;
@@ -178,7 +219,7 @@ function renderOverview() {
   $("#navAll").textContent = data.requests.length;
   els.lastUpdated.textContent = `${data.cached ? "Cached" : "Updated"} ${new Intl.DateTimeFormat(undefined, { timeStyle: "short" }).format(new Date(data.fetchedAt))}`;
   const issueCount = data.datasets.reduce((sum, dataset) => sum + dataset.errors.length, 0) + data.discoveryErrors.length;
-  $("#datasetHealth").textContent = issueCount ? `${issueCount} API issue${issueCount === 1 ? "" : "s"}` : "connected";
+  $("#datasetHealth").textContent = issueCount ? `${issueCount} sync issue${issueCount === 1 ? "" : "s"}` : "All datasets synced";
   els.warningBar.classList.toggle("hidden", issueCount === 0);
   if (issueCount) els.warningBar.textContent = `Some data could not be loaded (${issueCount} API ${issueCount === 1 ? "error" : "errors"}). Check that the token has write access to each listed dataset.`;
   const account = data.account;
@@ -305,6 +346,11 @@ function printableValue(value) {
   return String(value);
 }
 
+function fieldLabel(label) {
+  const text = String(label).replace(/([a-z])([A-Z])/g, "$1 $2").replaceAll("_", " ");
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 function auditActionLabel(entry) {
   if (entry.action === "accepted") return "Approved";
   if (entry.action === "rejected") return entry.previousStatus === "accepted" ? "Revoked" : "Rejected";
@@ -323,16 +369,17 @@ function openRequestDetails(request) {
     <div class="details-identity">
       <span class="initial large-initial">${escapeHtml(initials(request.fullname || request.username))}</span>
       <div><a data-external href="${escapeHtml(profileUrl(request.username))}">@${escapeHtml(request.username)}</a>${request.email ? `<a data-external href="${escapeHtml(emailSearchUrl(request.email))}">${escapeHtml(request.email)}</a>` : ""}</div>
-      <span class="status-pill status-${escapeHtml(request.status)}">${escapeHtml(request.status)}</span>
+      ${statusPill(request.status)}
     </div>
     <section class="detail-section"><h3>Request</h3><dl class="detail-grid">
       <div><dt>Dataset</dt><dd><a data-external href="${escapeHtml(datasetUrl(request.repoId))}">${escapeHtml(request.repoId)}</a></dd></div>
       <div><dt>Requested</dt><dd>${escapeHtml(fullDate(request.requestedAt))}</dd></div>
       <div><dt>Reviewed</dt><dd>${escapeHtml(fullDate(request.reviewedAt))}</dd></div>
     </dl></section>
-    <section class="detail-section"><h3>Submitted answers</h3>${fields.length ? `<dl class="field-list">${fields.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(printableValue(value))}</dd></div>`).join("")}</dl>` : `<p class="muted">No additional form answers were returned for this request.</p>`}</section>
-    <section class="detail-section"><h3>Requests across datasets <span>${remoteHistory.length}</span></h3><div class="history-list">${remoteHistory.map((item) => `<article><div><strong>${escapeHtml(item.repoId)}</strong><small>${escapeHtml(fullDate(item.requestedAt))}</small></div><span class="status-pill status-${escapeHtml(item.status)}">${escapeHtml(item.status)}</span></article>`).join("")}</div></section>
+    <section class="detail-section"><h3>Submitted answers</h3>${fields.length ? `<dl class="field-list">${fields.map(([label, value]) => `<div><dt>${escapeHtml(fieldLabel(label))}</dt><dd>${escapeHtml(printableValue(value))}</dd></div>`).join("")}</dl>` : `<p class="muted">No additional form answers were returned for this request.</p>`}</section>
+    <section class="detail-section"><h3>Requests across datasets <span>${remoteHistory.length}</span></h3><div class="history-list">${remoteHistory.map((item) => `<article><div><strong>${escapeHtml(item.repoId)}</strong><small>${escapeHtml(fullDate(item.requestedAt))}</small></div>${statusPill(item.status)}</article>`).join("")}</div></section>
     <section class="detail-section"><h3>Local decision history <span>${localHistory.length}</span></h3>${localHistory.length ? `<div class="history-list">${localHistory.map((entry) => `<article><div><strong>${escapeHtml(auditActionLabel(entry))} · ${escapeHtml(entry.repoId)}</strong><small>${escapeHtml(fullDate(entry.timestamp))}${entry.reason ? ` · ${escapeHtml(entry.reason)}` : ""}</small></div></article>`).join("")}</div>` : `<p class="muted">No local decisions recorded for this requester yet.</p>`}</section>`;
+  els.detailsActions.innerHTML = actionButtons(request);
   els.detailsDialog.showModal();
 }
 
@@ -399,15 +446,16 @@ els.forgetTokenButton.addEventListener("click", async () => {
 els.refreshButton.addEventListener("click", () => loadOverview(true));
 els.sidebarToggle.addEventListener("click", () => setSidebarCollapsed(!els.appView.classList.contains("sidebar-collapsed")));
 els.exportButton.addEventListener("click", exportCsv);
-els.searchInput.addEventListener("input", () => { state.query = els.searchInput.value; state.selected.clear(); renderTable(); });
-els.datasetFilter.addEventListener("change", () => { state.dataset = els.datasetFilter.value; state.selected.clear(); renderTable(); });
-els.sortSelect.addEventListener("change", () => { state.sort = els.sortSelect.value; renderTable(); });
-els.dateFilter.addEventListener("change", () => { state.dateRange = els.dateFilter.value; state.selected.clear(); renderTable(); });
+els.searchInput.addEventListener("input", () => { state.query = els.searchInput.value; state.page = 1; state.selected.clear(); renderTable(); });
+els.datasetFilter.addEventListener("change", () => { state.dataset = els.datasetFilter.value; state.page = 1; state.selected.clear(); renderTable(); });
+els.sortSelect.addEventListener("change", () => { state.sort = els.sortSelect.value; state.page = 1; renderTable(); });
+els.dateFilter.addEventListener("change", () => { state.dateRange = els.dateFilter.value; state.page = 1; state.selected.clear(); renderTable(); });
 els.clearFiltersButton.addEventListener("click", () => {
   state.query = "";
   state.dataset = "all";
   state.sort = "newest";
   state.dateRange = "all";
+  state.page = 1;
   els.searchInput.value = "";
   els.datasetFilter.value = "all";
   els.sortSelect.value = "newest";
@@ -418,20 +466,39 @@ els.clearFiltersButton.addEventListener("click", () => {
 els.auditButton.addEventListener("click", () => { renderAuditLog(); els.auditDialog.showModal(); });
 els.closeAuditButton.addEventListener("click", () => els.auditDialog.close());
 els.closeDetailsButton.addEventListener("click", () => els.detailsDialog.close());
+els.detailsActions.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-action]");
+  if (!button) return;
+  const request = state.data.requests.find((item) => item.id === button.dataset.id);
+  if (!request) return;
+  els.detailsDialog.close();
+  openConfirm(button.dataset.action, [request]);
+});
 els.exportAuditCsvButton.addEventListener("click", exportAuditCsv);
 els.exportAuditJsonButton.addEventListener("click", exportAuditJson);
 els.reasonInput.addEventListener("input", () => { els.reasonCount.textContent = els.reasonInput.value.length; });
 
 $$('.nav-item').forEach((button) => button.addEventListener("click", () => {
   state.status = button.dataset.status;
+  state.page = 1;
   state.selected.clear();
-  $$('.nav-item').forEach((item) => item.classList.toggle("active", item === button));
+  $$('.nav-item').forEach((item) => {
+    item.classList.toggle("active", item === button);
+    if (item === button) item.setAttribute("aria-current", "page");
+    else item.removeAttribute("aria-current");
+  });
   els.pageTitle.textContent = { pending: "Pending review", accepted: "Accepted access", rejected: "Rejected requests", all: "All requests" }[state.status];
+  els.pageDescription.textContent = {
+    pending: "Review and decide who can access your datasets.",
+    accepted: "Manage approved access across your datasets.",
+    rejected: "Review decisions and reconsider access requests.",
+    all: "Every dataset access request in one workspace.",
+  }[state.status];
   renderTable();
 }));
 
 els.selectAll.addEventListener("change", () => {
-  for (const request of visibleRequests()) if (els.selectAll.checked) state.selected.add(request.id); else state.selected.delete(request.id);
+  for (const request of currentPageRequests()) if (els.selectAll.checked) state.selected.add(request.id); else state.selected.delete(request.id);
   renderTable();
 });
 
@@ -472,6 +539,26 @@ els.confirmForm.addEventListener("submit", (event) => {
   if (event.submitter?.value !== "confirm") { state.pendingAction = null; return; }
   event.preventDefault();
   performAction();
+});
+
+els.pageSizeSelect.addEventListener("change", () => {
+  state.pageSize = Number(els.pageSizeSelect.value);
+  state.page = 1;
+  renderTable();
+});
+els.previousPageButton.addEventListener("click", () => { state.page = Math.max(1, state.page - 1); renderTable(); });
+els.nextPageButton.addEventListener("click", () => { state.page++; renderTable(); });
+document.addEventListener("keydown", (event) => {
+  if (!(event.ctrlKey || event.metaKey) || event.altKey || els.appView.classList.contains("hidden")) return;
+  const editing = event.target instanceof Element && event.target.matches("input, textarea, [contenteditable=true]");
+  if (event.key.toLowerCase() === "k" && !document.querySelector("dialog[open]")) {
+    event.preventDefault();
+    els.searchInput.focus();
+    els.searchInput.select();
+  } else if (event.key.toLowerCase() === "b" && !editing && !document.querySelector("dialog[open]")) {
+    event.preventDefault();
+    setSidebarCollapsed(!els.appView.classList.contains("sidebar-collapsed"));
+  }
 });
 
 function renderUpdateStatus(update) {
@@ -559,6 +646,8 @@ async function start() {
     await loadOverview();
     const demoParams = new URLSearchParams(window.location.search);
     if (demoParams.get("demo") === "dashboard") {
+      const status = demoParams.get("status");
+      if (["pending", "accepted", "rejected", "all"].includes(status)) document.querySelector(`.nav-item[data-status="${status}"]`).click();
       const requestId = demoParams.get("details");
       const request = requestId && state.data.requests.find((item) => item.id === requestId);
       if (request) openRequestDetails(request);

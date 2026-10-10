@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light" />
-    <meta name="theme-color" content="#f6f3ec" />
+    <meta name="theme-color" content="#ffffff" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https://huggingface.co https://cdn-avatars.huggingface.co; style-src 'self'; script-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; object-src 'none'" />
     <title>HF Access Desk</title>
     <meta name="description" content="Review gated Hugging Face dataset access requests in one place." />
@@ -15,12 +15,12 @@
       <main class="login-card setup-card">
         <div class="setup-heading">
           <img class="brand-mark" src="./app-icon.png" alt="" aria-hidden="true" />
-          <div><p class="eyebrow">Welcome to</p><h1>Access Desk</h1></div>
+          <div><p class="eyebrow">Hugging Face workspace</p><h1>Connect your account</h1></div>
         </div>
-        <p class="setup-lede">Manage every gated dataset request from one private desktop workspace.</p>
+        <p class="setup-lede">Review access requests across your datasets. Connect once to bring your review queue into Access Desk.</p>
         <div class="security-note">
-          <span class="security-icon">◆</span>
-          <div><strong>Stored securely on this PC</strong><p>Your token is encrypted with Windows protected storage. It never appears in the interface again or enters the project files.</p></div>
+          <span class="security-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6z"/><path d="m8 12 3 3 5-6"/></svg></span>
+          <div><strong>Your token stays on this PC</strong><p>Encrypted with Windows protected storage. Your account connects directly to Hugging Face.</p></div>
         </div>
         <form id="tokenForm">
           <div class="label-row"><label for="tokenInput">Hugging Face token</label><button id="tokenHelp" class="inline-link" type="button">Create a token ↗</button></div>
@@ -43,14 +43,15 @@
         <div class="sidebar-head">
           <div class="brand" aria-label="HF Access Desk home">
             <img class="brand-mark small" src="./app-icon.png" alt="" aria-hidden="true" />
-            <span>Access Desk</span>
+            <span>Access Desk<small>Hugging Face</small></span>
           </div>
           <button id="sidebarToggle" class="sidebar-toggle" type="button" aria-label="Collapse sidebar" aria-expanded="true" title="Collapse sidebar">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
           </button>
         </div>
+        <p class="nav-section-label">Access requests</p>
         <nav aria-label="Request status">
-          <button class="nav-item active" data-status="pending" title="Pending requests" aria-label="Pending requests">
+          <button class="nav-item active" data-status="pending" title="Pending requests" aria-label="Pending requests" aria-current="page">
             <span class="nav-icon amber" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><span>Pending</span><span id="navPending" class="nav-count">0</span>
           </button>
           <button class="nav-item" data-status="accepted" title="Accepted requests" aria-label="Accepted requests">
@@ -63,6 +64,11 @@
             <span class="nav-icon ink" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M8 8h9M8 12h9M8 16h9M6 8h.01M6 12h.01M6 16h.01"/></svg></span><span>All requests</span><span id="navAll" class="nav-count">0</span>
           </button>
         </nav>
+        <div class="sidebar-tools">
+          <p class="nav-section-label">Workspace</p>
+          <button id="auditButton" class="utility-item" type="button" title="Audit log" aria-label="Audit log"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4H5v16h14v-4M9 9h3M9 13h6M9 17h6"/><circle cx="17" cy="7" r="4"/><path d="M17 5v2l1 1"/></svg><span>Audit log</span></button>
+          <button id="settingsButton" class="utility-item" type="button" title="Settings and updates" aria-label="Settings and updates"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h2m6 0h8M4 17h8m6 0h2"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg><span>Settings &amp; updates</span></button>
+        </div>
         <div class="sidebar-foot">
           <div id="accountMini" class="account-mini"></div>
           <button id="changeTokenButton" class="text-button">Change token</button>
@@ -70,17 +76,17 @@
       </aside>
 
       <main class="main-content">
+        <div class="workspace-bar"><div class="breadcrumb"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg><span>Workspace</span><span class="breadcrumb-divider">/</span><strong>Dataset access</strong></div><span class="workspace-label">Hugging Face</span></div>
         <header class="topbar">
           <div>
-            <p class="eyebrow">Gated dataset requests</p>
             <h1 id="pageTitle">Pending review</h1>
+            <p id="pageDescription" class="page-description">Review and decide who can access your datasets.</p>
           </div>
           <div class="topbar-actions">
             <span id="lastUpdated" class="last-updated"></span>
-            <button id="settingsButton" class="icon-button" type="button" title="Settings and updates" aria-label="Settings and updates"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg></button>
-            <button id="auditButton" class="button secondary compact-button" type="button">Audit log</button>
-            <button id="refreshButton" class="icon-button" title="Refresh from Hugging Face" aria-label="Refresh from Hugging Face">
+            <button id="refreshButton" class="button secondary refresh-button" title="Refresh from Hugging Face" aria-label="Refresh from Hugging Face">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6v5h-5M4 18v-5h5M18.5 9A7 7 0 0 0 6.2 6.2L4 8m16 8-2.2 1.8A7 7 0 0 1 5.5 15"/></svg>
+              <span>Refresh</span>
             </button>
           </div>
         </header>
@@ -92,26 +98,27 @@
         <section id="dashboardContent" class="dashboard-content hidden">
           <div class="stats-grid">
             <article class="stat-card pending-stat">
-              <span>Awaiting decision</span><strong id="statPending">0</strong><small>across all datasets</small>
+              <span>Pending requests</span><strong id="statPending">0</strong><small>Awaiting your review</small>
             </article>
             <article class="stat-card">
-              <span>Gated datasets</span><strong id="statDatasets">0</strong><small id="datasetHealth">connected</small>
+              <span>Connected datasets</span><strong id="statDatasets">0</strong><small id="datasetHealth">All datasets synced</small>
             </article>
             <article class="stat-card">
-              <span>Accepted users</span><strong id="statAccepted">0</strong><small>total approvals</small>
+              <span>Approved requests</span><strong id="statAccepted">0</strong><small>Across connected datasets</small>
             </article>
           </div>
 
           <div id="warningBar" class="warning-bar hidden" role="status"></div>
 
           <section class="request-panel">
+            <div class="panel-heading"><h2>Requests <span id="queueCount" class="count-badge">0</span></h2><span class="panel-hint">Select rows to review in bulk</span></div>
             <div class="toolbar">
               <div class="search-wrap">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
-                <input id="searchInput" type="search" placeholder="Search people, email, or dataset…" aria-label="Search requests" />
+                <input id="searchInput" type="search" placeholder="Search requests…" aria-label="Search people, email, or dataset" /><kbd class="search-shortcut">Ctrl K</kbd>
               </div>
               <select id="datasetFilter" aria-label="Filter by dataset"><option value="all">All datasets</option></select>
-              <button id="exportButton" class="button secondary">Export CSV</button>
+              <button id="exportButton" class="button secondary"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-4-4 4 4 4-4M4 16v5h16v-5"/></svg>Export CSV</button>
             </div>
 
             <div class="filter-toolbar" aria-label="Advanced request filters">
@@ -130,7 +137,6 @@
                 <option value="365">Last year</option>
               </select></label>
               <button id="clearFiltersButton" class="text-action" type="button">Clear filters</button>
-              <span id="resultCount" class="result-count"></span>
             </div>
 
             <div id="bulkBar" class="bulk-bar hidden">
@@ -150,26 +156,27 @@
                     <th>Dataset</th>
                     <th>Requested</th>
                     <th>Status</th>
-                    <th><span class="sr-only">Actions</span></th>
+                    <th class="actions-heading">Actions</th>
                   </tr>
                 </thead>
                 <tbody id="requestRows"></tbody>
               </table>
               <div id="emptyState" class="empty-state hidden">
-                <div class="empty-icon">✓</div>
-                <h2>Queue is clear</h2>
-                <p>No requests match the current view.</p>
+                <div class="empty-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM4 13h4l2 3h4l2-3h4"/></svg></div>
+                <h2 id="emptyTitle">No requests</h2>
+                <p id="emptyDescription">No requests match the current view.</p>
               </div>
               <div id="loadingState" class="loading-state">
                 <div class="spinner"></div><span>Collecting requests from your datasets…</span>
               </div>
             </div>
+            <footer class="table-footer"><span id="resultCount" class="result-count" aria-live="polite"></span><div class="pagination"><label for="pageSizeSelect">Rows per page</label><select id="pageSizeSelect"><option value="10">10</option><option value="25" selected>25</option><option value="50">50</option><option value="100">100</option></select><span id="pageInfo"></span><button id="previousPageButton" class="icon-button" type="button" title="Previous page" aria-label="Previous page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button><button id="nextPageButton" class="icon-button" type="button" title="Next page" aria-label="Next page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button></div></footer>
           </section>
         </section>
       </main>
     </div>
 
-    <dialog id="confirmDialog">
+    <dialog id="confirmDialog" aria-labelledby="confirmTitle" aria-describedby="confirmMessage">
       <form method="dialog" id="confirmForm">
         <button class="dialog-close" value="cancel" aria-label="Close">×</button>
         <p class="eyebrow">Confirm action</p>
@@ -187,20 +194,21 @@
       </form>
     </dialog>
 
-    <dialog id="detailsDialog" class="detail-drawer">
+    <dialog id="detailsDialog" class="detail-drawer" aria-labelledby="detailsTitle">
       <div class="drawer-shell">
-        <button id="closeDetailsButton" class="dialog-close" type="button" aria-label="Close request details">×</button>
+        <button id="closeDetailsButton" class="dialog-close" type="button" aria-label="Close request details" autofocus>×</button>
         <p class="eyebrow">Request details</p>
         <h2 id="detailsTitle">Requester</h2>
         <div id="detailsBody" class="details-body"></div>
       </div>
+      <div id="detailsActions" class="drawer-actions"></div>
     </dialog>
 
-    <dialog id="auditDialog" class="audit-dialog">
+    <dialog id="auditDialog" class="audit-dialog" aria-labelledby="auditTitle">
       <div class="audit-shell">
         <button id="closeAuditButton" class="dialog-close" type="button" aria-label="Close audit log">×</button>
         <div class="audit-heading">
-          <div><p class="eyebrow">Stored securely on this PC</p><h2>Local audit log</h2></div>
+          <div><p class="eyebrow">Stored securely on this PC</p><h2 id="auditTitle">Local audit log</h2></div>
           <div class="audit-actions">
             <button id="exportAuditCsvButton" class="button secondary" type="button">Export CSV</button>
             <button id="exportAuditJsonButton" class="button secondary" type="button">Export JSON</button>
@@ -220,7 +228,7 @@
     <dialog id="settingsDialog" class="settings-dialog" aria-labelledby="settingsTitle">
       <div class="settings-shell">
         <button id="closeSettingsButton" class="dialog-close" type="button" aria-label="Close settings">×</button>
-        <p class="eyebrow">Make it yours</p><h2 id="settingsTitle">Settings &amp; updates</h2>
+        <p class="eyebrow">Workspace preferences</p><h2 id="settingsTitle">Settings &amp; updates</h2>
         <form id="settingsForm">
           <section class="settings-section">
             <h3>Request monitoring</h3>

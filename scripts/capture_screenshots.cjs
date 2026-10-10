@@ -28,6 +28,7 @@ async function capture(name, query, profileRoot) {
     "--disable-software-rasterizer",
     "--hide-scrollbars",
     "--allow-file-access-from-files",
+    "--virtual-time-budget=1200",
     "--window-size=1440,900",
     `--user-data-dir=${profile}`,
     `--screenshot=${screenshot}`,

@@ -34,19 +34,26 @@
     { id: "audit-02", timestamp: "2026-10-02T08:10:00Z", action: "rejected", previousStatus: "pending", repoId: "demo-research/Safety-Evaluation-Suite", username: "EA", reason: "Use case needs clarification" },
   ];
 
+  if (demoParams.get("rows") === "65") {
+    for (let i = 1; i <= 65; i++) requests.push({
+      id: `large-demo-${i}`, repoId: datasets[i % datasets.length].id,
+      fullname: `Demo Researcher ${i}`, username: `sample-user-${i}`, email: "",
+      status: "pending", requestedAt: "2026-10-09T12:00:00Z", reviewedAt: null, fields: null,
+    });
+  }
   const overview = {
     account: { username: "Demo Workspace", avatarUrl: null },
     namespaces: ["sample-lab", "demo-research"],
     datasets,
     requests,
-    counts: { pending: 4, accepted: 2, rejected: 1 },
+    counts: { pending: requests.filter((item) => item.status === "pending").length, accepted: 2, rejected: 1 },
     discoveryErrors: [],
     fetchedAt: "2026-09-26T14:30:00Z",
     cached: false,
   };
 
   let preferences = { refreshMinutes: 5, notifications: true, checkUpdates: true };
-  const updateStatus = { status: "current", currentVersion: "1.2.0", message: "Version 1.2.0 is up to date." };
+  const updateStatus = { status: "current", currentVersion: "1.3.0", message: "Version 1.3.0 is up to date." };
   window.hfDesk = Object.freeze({
     getCredentialStatus: async () => ({ hasToken: demoView !== "setup" }),
     saveCredential: async () => ({ saved: true, username: "Demo Workspace" }),

@@ -490,7 +490,7 @@ function createWindow() {
     height: 900,
     minWidth: 940,
     minHeight: 640,
-    backgroundColor: "#f5f2ea",
+    backgroundColor: "#ffffff",
     title: "HF Access Desk",
     autoHideMenuBar: true,
     show: false,
