@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.4.0 — 2026-10-21
+
+- Added a separate Dataset Analytics section covering gated and open datasets across personal and writable organization namespaces.
+- Added rolling 30-day and all-time download counts, likes, storage, repository dates, and access types, with coverage labels for unavailable metrics.
+- Added dataset comparison charts, per-dataset drill-down, metric and time-range selectors, accessible observation tables, and CSV export.
+- Added encrypted, account-specific local history with one observation per UTC day, up to two years of retention, and cached background refresh.
+- Added import of Hugging Face Publisher Analytics CSV files for actual historical daily download charts. Missing dates and metrics are never inferred.
+- Added optional Windows update notifications with per-version deduplication and a click-through to Settings & updates.
+- Verified public Hub metadata, pagination, storage-detail requests, imports, unknown values, desktop alerts, browser flows, and the real sandboxed Electron renderer.
+- Added a fictional-data analytics screenshot to the README.
+
 ## 1.3.1 — 2026-10-10
 
 - Made dark mode the default for new and existing installations.

@@ -1,3 +1,5 @@
+import { DatasetAnalytics } from "./analytics.js";
+
 const state = {
   data: null,
   status: "pending",
@@ -12,7 +14,29 @@ const state = {
   update: null,
   page: 1,
   pageSize: 25,
+  view: "requests",
 };
+
+const analytics = new DatasetAnalytics({
+  onLoaded: (data) => {
+    if (state.view === "analytics") els.lastUpdated.textContent = `Updated ${new Intl.DateTimeFormat(undefined, { timeStyle: "short" }).format(new Date(data.fetchedAt))}`;
+  },
+  onMessage: (message, type) => toast(friendlyError(message), type),
+});
+
+async function openAnalytics() {
+  state.view = "analytics";
+  els.dashboardContent.classList.add("hidden");
+  $("#analyticsContent").classList.remove("hidden");
+  $("#analyticsButton").classList.add("active");
+  $("#analyticsButton").setAttribute("aria-current", "page");
+  $("#sectionBreadcrumb").textContent = "Dataset analytics";
+  $$(".nav-item").forEach((button) => { button.classList.remove("active"); button.removeAttribute("aria-current"); });
+  els.pageTitle.textContent = "Dataset analytics";
+  els.pageDescription.textContent = "Downloads, reach, and growth across your Hugging Face datasets.";
+  els.refreshButton.disabled = true;
+  try { await analytics.load(); } finally { els.refreshButton.disabled = false; }
+}
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -217,7 +241,7 @@ function renderOverview() {
   $("#navAccepted").textContent = data.counts.accepted;
   $("#navRejected").textContent = data.counts.rejected;
   $("#navAll").textContent = data.requests.length;
-  els.lastUpdated.textContent = `${data.cached ? "Cached" : "Updated"} ${new Intl.DateTimeFormat(undefined, { timeStyle: "short" }).format(new Date(data.fetchedAt))}`;
+  if (state.view === "requests") els.lastUpdated.textContent = `${data.cached ? "Cached" : "Updated"} ${new Intl.DateTimeFormat(undefined, { timeStyle: "short" }).format(new Date(data.fetchedAt))}`;
   const issueCount = data.datasets.reduce((sum, dataset) => sum + dataset.errors.length, 0) + data.discoveryErrors.length;
   $("#datasetHealth").textContent = issueCount ? `${issueCount} sync issue${issueCount === 1 ? "" : "s"}` : "All datasets synced";
   els.warningBar.classList.toggle("hidden", issueCount === 0);
@@ -234,7 +258,7 @@ function renderOverview() {
   if (!data.datasets.some((dataset) => dataset.id === state.dataset)) state.dataset = "all";
   els.datasetFilter.innerHTML = `<option value="all">All datasets</option>${data.datasets.map((dataset) => `<option value="${escapeHtml(dataset.id)}">${escapeHtml(dataset.id)}</option>`).join("")}`;
   els.datasetFilter.value = state.dataset;
-  els.dashboardContent.classList.remove("hidden");
+  els.dashboardContent.classList.toggle("hidden", state.view !== "requests");
   els.setupPanel.classList.add("hidden");
   renderTable();
 }
@@ -411,6 +435,10 @@ els.tokenForm.addEventListener("submit", async (event) => {
   els.saveTokenButton.textContent = "Validating token…";
   try {
     const result = await window.hfDesk.saveCredential(els.tokenInput.value);
+    analytics.reset();
+    state.data = null;
+    state.audit = [];
+    document.querySelector('.nav-item[data-status="pending"]').click();
     state.hasToken = true;
     els.tokenInput.value = "";
     showApp();
@@ -443,7 +471,14 @@ els.forgetTokenButton.addEventListener("click", async () => {
   } catch (error) { els.tokenError.textContent = friendlyError(error); }
 });
 
-els.refreshButton.addEventListener("click", () => loadOverview(true));
+els.refreshButton.addEventListener("click", async () => {
+  if (state.view !== "analytics") return loadOverview(true);
+  els.refreshButton.disabled = true;
+  els.refreshButton.classList.add("spinning");
+  try { await analytics.load(true); }
+  finally { els.refreshButton.disabled = false; els.refreshButton.classList.remove("spinning"); }
+});
+$("#analyticsButton").addEventListener("click", openAnalytics);
 els.sidebarToggle.addEventListener("click", () => setSidebarCollapsed(!els.appView.classList.contains("sidebar-collapsed")));
 els.exportButton.addEventListener("click", exportCsv);
 els.searchInput.addEventListener("input", () => { state.query = els.searchInput.value; state.page = 1; state.selected.clear(); renderTable(); });
@@ -479,6 +514,12 @@ els.exportAuditJsonButton.addEventListener("click", exportAuditJson);
 els.reasonInput.addEventListener("input", () => { els.reasonCount.textContent = els.reasonInput.value.length; });
 
 $$('.nav-item').forEach((button) => button.addEventListener("click", () => {
+  state.view = "requests";
+  $("#analyticsContent").classList.add("hidden");
+  $("#analyticsButton").classList.remove("active");
+  $("#analyticsButton").removeAttribute("aria-current");
+  $("#sectionBreadcrumb").textContent = "Dataset access";
+  els.dashboardContent.classList.remove("hidden");
   state.status = button.dataset.status;
   state.page = 1;
   state.selected.clear();
@@ -551,7 +592,7 @@ els.nextPageButton.addEventListener("click", () => { state.page++; renderTable()
 document.addEventListener("keydown", (event) => {
   if (!(event.ctrlKey || event.metaKey) || event.altKey || els.appView.classList.contains("hidden")) return;
   const editing = event.target instanceof Element && event.target.matches("input, textarea, [contenteditable=true]");
-  if (event.key.toLowerCase() === "k" && !document.querySelector("dialog[open]")) {
+  if (event.key.toLowerCase() === "k" && state.view === "requests" && !document.querySelector("dialog[open]")) {
     event.preventDefault();
     els.searchInput.focus();
     els.searchInput.select();
@@ -582,6 +623,7 @@ async function openSettings() {
     els.refreshInterval.value = String(preferences.refreshMinutes);
     els.notificationsToggle.checked = preferences.notifications;
     els.updatesToggle.checked = preferences.checkUpdates;
+    $("#updateNotificationsToggle").checked = preferences.updateNotifications !== false;
     els.settingsSaved.textContent = "";
     renderUpdateStatus(await window.hfDesk.getUpdateStatus());
     els.settingsDialog.showModal();
@@ -597,7 +639,7 @@ els.settingsForm.addEventListener("submit", async (event) => {
   const button = event.submitter;
   button.disabled = true;
   try {
-    const saved = await window.hfDesk.saveSettings({ theme: els.themeSelect.value, refreshMinutes: Number(els.refreshInterval.value), notifications: els.notificationsToggle.checked, checkUpdates: els.updatesToggle.checked });
+    const saved = await window.hfDesk.saveSettings({ theme: els.themeSelect.value, refreshMinutes: Number(els.refreshInterval.value), notifications: els.notificationsToggle.checked, checkUpdates: els.updatesToggle.checked, updateNotifications: $("#updateNotificationsToggle").checked });
     window.hfAppearance.setTheme(saved.theme);
     els.settingsSaved.textContent = "Preferences saved";
   } catch (error) { toast(friendlyError(error), "error"); }
@@ -629,6 +671,8 @@ async function start() {
   try {
     window.hfAppearance.setTheme((await window.hfDesk.getSettings()).theme);
     window.hfDesk.onUpdateStatus(renderUpdateStatus);
+    window.hfDesk.onOpenUpdates(() => { if (!els.settingsDialog.open) openSettings(); });
+    window.hfDesk.onAnalytics((data) => { if (state.hasToken && state.data?.account.username === data.account) analytics.accept(data); });
     window.hfDesk.onOverview((overview) => {
       if (!state.hasToken) return;
       state.data = overview;
@@ -638,7 +682,7 @@ async function start() {
     });
     window.hfDesk.onRefreshError((message) => {
       if (!state.hasToken) return;
-      els.lastUpdated.textContent = message;
+      if (state.view === "requests") els.lastUpdated.textContent = message;
     });
     window.hfDesk.onOpenPending(() => document.querySelector('.nav-item[data-status="pending"]').click());
     renderUpdateStatus(await window.hfDesk.getUpdateStatus());
@@ -659,6 +703,7 @@ async function start() {
         els.auditDialog.showModal();
       }
       if (demoParams.get("settings") === "1") await openSettings();
+      if (demoParams.get("analytics") === "1") await openAnalytics();
     }
   } catch (error) {
     showSetup(false);

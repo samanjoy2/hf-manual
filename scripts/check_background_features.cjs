@@ -110,6 +110,8 @@ test("main-process IPC persists preferences, polls, and emits private notificati
   await writeFile(path.join(directory, "settings.json"), JSON.stringify({ refreshMinutes: 5, notifications: true, checkUpdates: true }));
   let pending = [{ username: "existing", time: "2026-10-07T01:00:00Z" }];
   let failPending = false;
+  let releaseVersion = "v1.1.0";
+  let selectedCsv = null;
   let ready;
   const app = new EventEmitter();
   Object.assign(app, {
@@ -139,11 +141,24 @@ test("main-process IPC persists preferences, polls, and emits private notificati
     ipcMain: { handle: (channel, callback) => handlers.set(channel, callback) },
     safeStorage: { isEncryptionAvailable: () => true, encryptString: (text) => Buffer.from(text), decryptString: (value) => value.toString() },
     shell: { openExternal: async () => {} }, session: { defaultSession: { setPermissionRequestHandler() {} } },
+    dialog: { showOpenDialog: async () => ({ canceled: !selectedCsv, filePaths: selectedCsv ? [selectedCsv] : [] }) },
   };
   const fetcher = async (url) => {
-    if (url.includes("api.github.com")) return new Response(JSON.stringify({ tag_name: "v1.1.0", draft: false, prerelease: false }));
+    if (url.includes("api.github.com")) {
+      const filename = `HF-Access-Desk-Setup-${releaseVersion.slice(1)}.exe`;
+      return new Response(JSON.stringify({ tag_name: releaseVersion, draft: false, prerelease: false, assets: [
+        { name: filename, size: 32, browser_download_url: `https://github.com/samanjoy2/hf-manual/releases/download/${releaseVersion}/${filename}` },
+        { name: `${filename}.sha256`, size: 120, browser_download_url: `https://github.com/samanjoy2/hf-manual/releases/download/${releaseVersion}/${filename}.sha256` },
+      ] }));
+    }
     if (url.includes("whoami")) return new Response(JSON.stringify({ name: "sample-owner" }));
-    if (url.includes("datasets?")) return new Response(JSON.stringify([{ id: "sample-lab/data", gated: "manual" }]));
+    if (url.includes("datasets?")) {
+      const query = new URL(url).searchParams;
+      if (query.has("cursor")) return new Response(JSON.stringify([{ id: "sample-owner/open", downloads: 0, likes: 2, gated: false }]));
+      if (query.has("expand")) return new Response(JSON.stringify([{ id: "sample-lab/data", gated: "manual", downloads: 33, downloadsAllTime: 500, likes: 4 }]), { headers: { link: '<https://huggingface.co/api/datasets?author=sample-owner&cursor=page2>; rel="next"' } });
+      return new Response(JSON.stringify([{ id: "sample-lab/data", gated: "manual" }]));
+    }
+    if (url.includes("expand=usedStorage")) return new Response(JSON.stringify({ usedStorage: 1024 }));
     if (url.endsWith("/pending")) return failPending ? new Response("Unavailable", { status: 503 }) : new Response(JSON.stringify(pending));
     return new Response("[]");
   };
@@ -190,4 +205,37 @@ test("main-process IPC persists preferences, polls, and emits private notificati
   await call("settings:save", { ...saved, theme: "invalid" });
   assert.equal(call("settings:get").theme, "dark");
   assert.throws(() => handlers.get("settings:get")({ senderFrame: { url: "https://example.com" } }), /Untrusted/);
+  const analytics = await call("analytics:get");
+  assert.equal(analytics.datasets.length, 2, "gated and open datasets across catalog pages");
+  assert.equal(analytics.datasets[0].downloadsAllTime, 500);
+  assert.equal(analytics.datasets[1].downloadsAllTime, null);
+  assert.equal(analytics.datasets[0].usedStorage, 1024);
+  assert.equal(analytics.history.length, 2);
+  assert.equal((await call("analytics:get", true)).history.length, 2, "one observation per dataset per UTC day");
+  selectedCsv = path.join(directory, "publisher.csv");
+  await writeFile(selectedCsv, "repoType,repoName,timestamp,downloads\ndataset,sample-lab/data,2026-10-01T00:00:00Z,9\n");
+  const imported = await call("analytics:import");
+  assert.equal(imported.imported, 1);
+  assert.equal(imported.data.publisherHistory[0].downloads, 9);
+  selectedCsv = null;
+  assert.equal((await call("analytics:import")).canceled, true);
+  const stored = (await readdir(directory)).find((name) => /^analytics-[a-f0-9]+\.bin$/.test(name));
+  assert.ok(stored);
+  await writeFile(path.join(directory, stored), "corrupted history");
+  const unavailable = await call("analytics:get", true);
+  assert.ok(unavailable.errors.some((error) => error.namespace === "Local history"));
+  assert.equal(await readFile(path.join(directory, stored), "utf8"), "corrupted history", "preserve unreadable history");
+  assert.throws(() => handlers.get("analytics:get")({ senderFrame: { url: "https://example.com" } }), /Untrusted/);
+  releaseVersion = "v2.0.0";
+  await call("updates:check");
+  assert.equal(notifications.length, 2, "one native alert for the new release");
+  assert.equal(notifications[1].options.title, "HF Access Desk update available");
+  notifications[1].emit("click");
+  assert.ok(sent.some((item) => item.channel === "updates:open"));
+  await call("updates:check");
+  assert.equal(notifications.length, 2, "deduplicate alerts for the same version");
+  await call("settings:save", { ...saved, updateNotifications: false });
+  releaseVersion = "v3.0.0";
+  await call("updates:check");
+  assert.equal(notifications.length, 2, "honor disabled update alerts");
 });

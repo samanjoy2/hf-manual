@@ -52,9 +52,28 @@
     cached: false,
   };
 
-  let preferences = { theme: "dark", refreshMinutes: 5, notifications: true, checkUpdates: true };
+  const analyticsDatasets = [
+    [datasets[0].id, 1460, 18320, 84, 2483027968, "Manual", false],
+    [datasets[1].id, 980, 9460, 42, 8145764352, "Manual", true],
+    [datasets[2].id, 720, 5120, 31, 524288000, "Manual", false],
+    ["sample-lab/Community-Text-Set", 530, 22100, 109, 4294967296, "Open", false],
+    ["demo-research/Small-Evaluation", 120, null, 8, null, "Open", false],
+  ].map(([id, downloads, downloadsAllTime, likes, usedStorage, gateMode, privateRepo]) => ({ id, downloads, downloadsAllTime, likes, usedStorage, gateMode, private: privateRepo, gated: gateMode !== "Open", createdAt: "2025-02-10T10:00:00Z", lastModified: "2026-10-14T12:00:00Z", tags: [] }));
+  const history = [];
+  const publisherHistory = [];
+  for (let i = 29; i >= 0; i--) {
+    const timestamp = new Date(Date.now() - i * 86_400_000).toISOString();
+    for (let j = 0; j < analyticsDatasets.length; j++) {
+      const dataset = analyticsDatasets[j];
+      history.push({ id: dataset.id, day: timestamp.slice(0, 10), timestamp, downloads: Math.round(dataset.downloads * (1 - i * .012) + (i ? Math.sin(i / 3 + j) * 25 : 0)), downloadsAllTime: dataset.downloadsAllTime === null ? null : dataset.downloadsAllTime - i * 30, likes: dataset.likes, usedStorage: dataset.usedStorage });
+      publisherHistory.push({ id: dataset.id, day: timestamp.slice(0, 10), downloads: Math.round(dataset.downloads / 30 + Math.sin(i / 2 + j) * 3) });
+    }
+  }
+  const analyticsData = { account: "Demo Workspace", datasets: analyticsDatasets, namespaces: ["sample-lab", "demo-research"], history, publisherHistory: [], errors: [], fetchedAt: new Date().toISOString() };
+
+  let preferences = { theme: "dark", refreshMinutes: 5, notifications: true, checkUpdates: true, updateNotifications: true };
   try { preferences = { ...preferences, ...JSON.parse(localStorage.getItem("hf-access-desk:demo-settings") || "{}") }; } catch { /* Use defaults. */ }
-  const updateStatus = { status: "current", currentVersion: "1.3.1", message: "Version 1.3.1 is up to date." };
+  const updateStatus = { status: "current", currentVersion: "1.4.0", message: "Version 1.4.0 is up to date." };
   window.hfDesk = Object.freeze({
     getCredentialStatus: async () => ({ hasToken: demoView !== "setup" }),
     saveCredential: async () => ({ saved: true, username: "Demo Workspace" }),
@@ -62,6 +81,9 @@
     getOverview: async () => overview,
     updateRequests: async ({ items = [] }) => ({ results: [], succeeded: items.length, failed: 0 }),
     getAuditLog: async () => auditLog,
+    getAnalytics: async () => analyticsData,
+    importAnalyticsHistory: async () => { analyticsData.publisherHistory = publisherHistory; return { canceled: false, imported: publisherHistory.length, data: analyticsData }; },
+    onAnalytics: () => () => {},
     getSettings: async () => preferences,
     saveSettings: async (value) => {
       preferences = value;
@@ -76,6 +98,7 @@
     onRefreshError: () => () => {},
     onOpenPending: () => () => {},
     onUpdateStatus: () => () => {},
+    onOpenUpdates: () => () => {},
     openExternal: async () => true,
   });
 })();

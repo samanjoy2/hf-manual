@@ -9,8 +9,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/samanjoy2/hf-manual/releases/tag/v1.3.1"><img alt="Release v1.3.1" src="https://img.shields.io/badge/release-v1.3.1-344960?style=flat-square" /></a>
-  <a href="https://github.com/samanjoy2/hf-manual/releases/tag/v1.3.1"><img alt="Download Windows installer" src="https://img.shields.io/badge/download-Windows_x64-344960?style=flat-square&logo=github" /></a>
+  <a href="https://github.com/samanjoy2/hf-manual/releases/tag/v1.4.0"><img alt="Release v1.4.0" src="https://img.shields.io/badge/release-v1.4.0-344960?style=flat-square" /></a>
+  <a href="https://github.com/samanjoy2/hf-manual/releases/tag/v1.4.0"><img alt="Download Windows installer" src="https://img.shields.io/badge/download-Windows_x64-344960?style=flat-square&logo=github" /></a>
   <img alt="Windows" src="https://img.shields.io/badge/Windows-10%2B-1f4d3b?style=flat-square&logo=windows" />
   <img alt="Electron" src="https://img.shields.io/badge/Electron-desktop-1f4d3b?style=flat-square&logo=electron" />
 </p>
@@ -53,6 +53,9 @@ HF Access Desk brings pending, accepted, and rejected requests from all the gate
 - Use **Ctrl+K** to search and **Ctrl+B** to collapse or expand navigation.
 - Replace or forget the saved token from inside the app.
 - Start in dark mode by default, or choose Light or Follow Windows in **Settings & updates → Appearance**. Your choice is remembered.
+- Explore dataset downloads, all-time reach, likes, storage, and repository dates in a separate **Dataset analytics** section.
+- Compare datasets, inspect locally recorded trends, import actual historical download records, and export metrics as CSV.
+- Receive an optional Windows notification when a new app version is detected, with one notice per version.
 
 ## A look inside
 
@@ -82,6 +85,18 @@ Dark mode is the default from v1.3.1 onward, including when upgrading from earli
 <img src="docs/screenshots/settings-updates.png" alt="HF Access Desk request monitoring and update settings" />
 </details>
 
+## Dataset analytics
+
+Open **Dataset analytics** in the sidebar. The section includes open and gated repositories in your personal and writable organization namespaces, even if a dataset has no access requests. Metrics include rolling 30-day downloads, all-time downloads recorded by Hugging Face, likes, storage used, creation and modification dates, and access type. Unavailable values are displayed as **—**, and totals show how many datasets report the metric. Downloads are events, not unique people. [Hugging Face's counting rules](https://huggingface.co/docs/hub/datasets-download-stats) explain how those events are recorded.
+
+![Dataset analytics with fictional data](docs/screenshots/dataset-analytics.png)
+
+The comparison chart ranks up to eight datasets by the selected metric. Select a dataset to drill into its figures. **Export CSV** exports the displayed dataset selection and current metadata.
+
+**Local observations** capture the current counters once per UTC day, replacing that day's observation on refresh. These are rolling counters or cumulative totals, not daily download volumes. History is encrypted, separated by connected account, and retained for up to two years (up to 100,000 observations). Metadata is cached for 15 minutes; manual refresh bypasses the cache. Background tracking runs with automatic request refresh after analytics has been opened. Closing the app or turning automatic refresh off stops collection.
+
+The app cannot reconstruct daily downloads from before tracking began. If your organization has Hugging Face Team/Enterprise, export its [Publisher Analytics CSV](https://huggingface.co/docs/hub/publisher-analytics) and choose **Import HF history**. The expected columns are `repoType`, `repoName`, `timestamp`, and `downloads` (additional columns such as `total` are allowed). Matching dataset records are imported locally, up to 100,000 records per file smaller than 20 MB. **Imported HF daily downloads** then plots those actual daily records. Only dates with data for every selected dataset are plotted; missing days are not treated as zero. Repository creation dates are supplied by Hugging Face, which has a March 2022 tracking floor for older repositories. [DatasetInfo reference](https://huggingface.co/docs/huggingface_hub/en/package_reference/hf_api)
+
 ## Download and install
 
 HF Access Desk currently ships as a Windows x64 installer.
@@ -98,6 +113,8 @@ Open **Settings & updates** from the sidebar. The installed app checks for stabl
 Requests refresh every five minutes by default. Change the interval or turn it off in **Settings & updates**. Monitoring works while the app is open, including when minimized; closing the app stops it. The first complete refresh establishes a baseline without announcing old requests. Later new pending requests generate one notification containing a count, without names, handles, or emails. Click it to open the pending queue. Windows notifications must be enabled for the app.
 
 The community build is not currently code-signed. Windows SmartScreen may therefore show an **Unknown publisher** warning. Release notes include a SHA-256 checksum so you can verify the downloaded installer.
+
+From v1.4.0, detected updates can also show a Windows notification once per release. Click the notification to open the update settings; disable these alerts independently in **Settings & updates**. Existing v1.2–v1.3 installations discover v1.4.0 using their existing startup/six-hour checks or **Check for updates**. There is no remote push service for closed apps; the new desktop update alert takes effect after installing v1.4.0.
 
 ## First launch
 
@@ -117,6 +134,7 @@ HF Access Desk is designed so the credential and Hugging Face API access stay in
 | Token at rest | Encrypted with Electron `safeStorage`, backed by Windows DPAPI |
 | Audit history at rest | Successful decisions encrypted with the same Windows protected storage |
 | Notification history at rest | Encrypted account baseline containing hashed request identifiers |
+| Analytics history at rest | Encrypted per-account metadata observations and imported daily records |
 | Update downloads | Restricted to this GitHub repository's stable release assets, with SHA-256 integrity checks |
 | Renderer isolation | Node.js integration disabled, context isolation enabled, sandbox enabled |
 | API access | Hugging Face requests run only in the main process |
@@ -148,6 +166,7 @@ Useful development commands:
 npm run check        # Validate JavaScript syntax
 npm run screenshots  # Rebuild README screenshots from fictional demo data
 npm run check:ui     # Exercise the interface in headless Edge or Chrome
+npm run check:electron # Smoke-test analytics in a hidden sandboxed Electron window
 npm run dist:win     # Build the Windows NSIS installer
 ```
 

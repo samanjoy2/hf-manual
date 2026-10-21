@@ -1,11 +1,13 @@
-const { app, BrowserWindow, ipcMain, safeStorage, shell, session, Notification, nativeTheme } = require("electron");
+const { app, BrowserWindow, ipcMain, safeStorage, shell, session, Notification, nativeTheme, dialog } = require("electron");
+const { createHash } = require("node:crypto");
 const { spawn } = require("node:child_process");
-const { mkdir, readFile, rename, unlink, writeFile } = require("node:fs/promises");
+const { mkdir, readFile, rename, stat, unlink, writeFile } = require("node:fs/promises");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { allowedExternalUrl } = require("./external-links.cjs");
 const { observeRequests } = require("./request-monitor.cjs");
 const { UpdateService } = require("./updates.cjs");
+const { normalizeDataset, recordSnapshot, importPublisherCsv, nextDatasetPage } = require("./analytics.cjs");
 
 const HF_ENDPOINT = "https://huggingface.co";
 const CACHE_TTL_MS = 60_000;
@@ -18,7 +20,12 @@ let overviewCache = null;
 let tokenCache = null;
 let credentialGeneration = 0;
 let overviewInFlight = null;
-let settings = { theme: "dark", refreshMinutes: 5, notifications: true, checkUpdates: true };
+let analyticsCache = null;
+let analyticsInFlight = null;
+let analyticsStorageQueue = Promise.resolve();
+let analyticsTrackingEnabled = false;
+let settings = { theme: "dark", refreshMinutes: 5, notifications: true, checkUpdates: true, updateNotifications: true };
+let notifiedUpdateVersion = "";
 let refreshTimer;
 let updateTimer;
 let updateService;
@@ -36,6 +43,7 @@ function normalizeSettings(value) {
     refreshMinutes: [0, 1, 5, 15, 30].includes(value?.refreshMinutes) ? value.refreshMinutes : 5,
     notifications: typeof value?.notifications === "boolean" ? value.notifications : true,
     checkUpdates: typeof value?.checkUpdates === "boolean" ? value.checkUpdates : true,
+    updateNotifications: typeof value?.updateNotifications === "boolean" ? value.updateNotifications : true,
   };
 }
 
@@ -67,6 +75,26 @@ function showRequestNotification(count) {
   notification.on("close", () => activeNotifications.delete(notification));
   notification.on("failed", () => activeNotifications.delete(notification));
   notification.show();
+}
+
+async function announceUpdate(state) {
+  if (state.status !== "available" || !app.isPackaged || !settings.updateNotifications || notifiedUpdateVersion === state.version || !Notification.isSupported()) return;
+  notifiedUpdateVersion = state.version;
+  const notification = new Notification({ title: "HF Access Desk update available", body: `Version ${state.version} is ready to download. Click to view the update.`, icon: path.join(PUBLIC_DIR, "app-icon.png") });
+  activeNotifications.add(notification);
+  notification.on("click", () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show(); mainWindow.focus();
+    sendToRenderer("updates:open", {});
+  });
+  notification.on("close", () => activeNotifications.delete(notification));
+  notification.on("failed", () => activeNotifications.delete(notification));
+  notification.show();
+  const file = path.join(app.getPath("userData"), "update-notice.json");
+  await mkdir(path.dirname(file), { recursive: true });
+  await writeFile(`${file}.tmp`, JSON.stringify({ version: state.version }));
+  await rename(`${file}.tmp`, file);
 }
 
 async function observeOverview(overview, generation) {
@@ -101,6 +129,9 @@ function scheduleBackgroundWork() {
         if (!(await loadToken())) return;
         const overview = await getOverview(true);
         sendToRenderer("monitor:overview", overview);
+        if (analyticsTrackingEnabled) {
+          try { sendToRenderer("analytics:changed", await getAnalytics()); } catch { /* Retain the last analytics view until the next refresh. */ }
+        }
       } catch { sendToRenderer("monitor:error", "Automatic refresh failed. The app will retry at the next interval."); }
     }, settings.refreshMinutes * 60_000);
   }
@@ -161,12 +192,15 @@ async function saveToken(token) {
   tokenCache = token;
   credentialGeneration++;
   overviewCache = null;
+  analyticsCache = null;
 }
 
 async function forgetToken() {
   credentialGeneration++;
   tokenCache = null;
   overviewCache = null;
+  analyticsCache = null;
+  analyticsTrackingEnabled = false;
   try { await unlink(credentialPath()); } catch (error) { if (error.code !== "ENOENT") throw error; }
 }
 
@@ -225,8 +259,9 @@ function encodeRepo(repoId) {
 }
 
 async function hubFetch(apiPath, token, options = {}) {
+  const { withLinks = false, ...fetchOptions } = options;
   const response = await fetch(`${HF_ENDPOINT}${apiPath}`, {
-    ...options,
+    ...fetchOptions,
     headers: {
       Accept: "application/json",
       Authorization: `Bearer ${token}`,
@@ -245,7 +280,118 @@ async function hubFetch(apiPath, token, options = {}) {
     error.status = response.status;
     throw error;
   }
-  return payload;
+  return withLinks ? { payload, link: response.headers.get("link") } : payload;
+}
+
+function analyticsFile(account) {
+  return path.join(app.getPath("userData"), `analytics-${createHash("sha256").update(account).digest("hex")}.bin`);
+}
+
+async function readAnalyticsStore(account) {
+  try {
+    const store = JSON.parse(await decryptText(await readFile(analyticsFile(account))));
+    if (store.version !== 1 || store.account !== account) throw new Error("Invalid analytics storage.");
+    return { version: 1, account, history: Array.isArray(store.history) ? store.history : [], publisherHistory: Array.isArray(store.publisherHistory) ? store.publisherHistory : [] };
+  } catch (error) {
+    if (error.code !== "ENOENT") throw new Error("Saved analytics could not be read. Your existing history has been preserved.");
+    return { version: 1, account, history: [], publisherHistory: [] };
+  }
+}
+
+async function writeAnalyticsStore(store) {
+  const file = analyticsFile(store.account);
+  await mkdir(path.dirname(file), { recursive: true });
+  await writeFile(`${file}.tmp`, await encryptText(JSON.stringify(store)), { mode: 0o600 });
+  await rename(`${file}.tmp`, file);
+}
+
+function analyticsStorage(task) {
+  const operation = analyticsStorageQueue.then(task);
+  analyticsStorageQueue = operation.catch(() => {});
+  return operation;
+}
+
+function getAnalytics(force = false) {
+  if (analyticsInFlight) return analyticsInFlight;
+  if (!force && analyticsCache && Date.now() - analyticsCache.createdAt < 15 * 60_000) return Promise.resolve(analyticsCache.value);
+  analyticsInFlight = buildAnalytics().finally(() => { analyticsInFlight = null; });
+  return analyticsInFlight;
+}
+
+async function buildAnalytics() {
+  const generation = credentialGeneration;
+  const token = await loadToken();
+  if (!token) throw new Error("No Hugging Face token is saved.");
+  const { whoami, username } = await identifyAccount(token);
+  const namespaces = [...new Set([username, ...normalizeOrgs(whoami)])];
+  const datasets = new Map();
+  const errors = [];
+  const fields = ["downloads", "downloadsAllTime", "likes", "createdAt", "lastModified", "gated", "private", "tags"];
+  await mapLimit(namespaces, 3, async (namespace) => {
+    const params = new URLSearchParams({ author: namespace, limit: "100" });
+    for (const field of fields) params.append("expand", field);
+    let next = `/api/datasets?${params}`;
+    let pages = 0;
+    try {
+      while (next && pages++ < 100) {
+        const { payload, link } = await hubFetch(next, token, { withLinks: true });
+        if (!Array.isArray(payload)) throw new Error("Unexpected dataset metadata response.");
+        for (const raw of payload) {
+          const normalized = normalizeDataset(raw);
+          if (normalized) datasets.set(normalized.id, normalized);
+        }
+        next = nextDatasetPage(link, namespace);
+      }
+      if (next) errors.push({ namespace, message: "The dataset catalog exceeded the pagination limit; this namespace is incomplete." });
+    } catch (error) { errors.push({ namespace, message: error.message }); }
+  });
+  if (generation !== credentialGeneration) throw new Error("The connected account changed. Refresh analytics again.");
+  const fetchedAt = new Date().toISOString();
+  const list = [...datasets.values()].sort((a, b) => a.id.localeCompare(b.id));
+  // The catalog endpoint rejects usedStorage; it is available on dataset details.
+  await mapLimit(list, 4, async (dataset) => {
+    try {
+      const detail = await hubFetch(`/api/datasets/${encodeRepo(dataset.id)}?expand=usedStorage`, token);
+      dataset.usedStorage = Number.isSafeInteger(detail?.usedStorage) && detail.usedStorage >= 0 ? detail.usedStorage : null;
+    } catch (error) { errors.push({ namespace: dataset.id, message: `Storage unavailable: ${error.message}` }); }
+  });
+  let history = [], publisherHistory = [];
+  await analyticsStorage(async () => {
+    try {
+      const store = await readAnalyticsStore(username);
+      store.history = recordSnapshot(store.history, list, fetchedAt);
+      history = store.history;
+      publisherHistory = store.publisherHistory;
+      if (generation !== credentialGeneration) throw new Error("The connected account changed.");
+      await writeAnalyticsStore(store);
+    } catch (error) { errors.push({ namespace: "Local history", message: error.message }); }
+  });
+  if (generation !== credentialGeneration) throw new Error("The connected account changed. Refresh analytics again.");
+  const value = { account: username, namespaces, datasets: list, history, publisherHistory, fetchedAt, errors };
+  analyticsCache = { createdAt: Date.now(), value };
+  analyticsTrackingEnabled = true;
+  return value;
+}
+
+async function importAnalyticsHistory() {
+  const generation = credentialGeneration;
+  const analytics = await getAnalytics();
+  const selected = await dialog.showOpenDialog(mainWindow, { title: "Import Hugging Face publisher history", properties: ["openFile"], filters: [{ name: "Hugging Face analytics CSV", extensions: ["csv"] }] });
+  if (selected.canceled || !selected.filePaths.length) return { canceled: true };
+  const file = selected.filePaths[0];
+  if ((await stat(file)).size > 20 * 1024 * 1024) throw new Error("Choose a CSV smaller than 20 MB.");
+  const csv = await readFile(file, "utf8");
+  return analyticsStorage(async () => {
+    if (generation !== credentialGeneration) throw new Error("The connected account changed. Import history again.");
+    const store = await readAnalyticsStore(analytics.account);
+    const result = importPublisherCsv(csv, analytics.datasets.map((dataset) => dataset.id), store.publisherHistory);
+    store.publisherHistory = result.rows;
+    await writeAnalyticsStore(store);
+    if (generation !== credentialGeneration) throw new Error("The connected account changed. Import history again.");
+    const data = { ...analytics, publisherHistory: result.rows };
+    analyticsCache = { createdAt: Date.now(), value: data };
+    return { canceled: false, imported: result.imported, data };
+  });
 }
 
 async function mapLimit(items, limit, mapper) {
@@ -455,6 +601,8 @@ function registerIpc() {
   ipcMain.handle("hub:overview", async (event, force) => { assertTrusted(event); return getOverview(Boolean(force)); });
   ipcMain.handle("hub:update-requests", async (event, body) => { assertTrusted(event); return updateRequests(body); });
   ipcMain.handle("audit:list", async (event) => { assertTrusted(event); return loadAuditLog(); });
+  ipcMain.handle("analytics:get", (event, force) => { assertTrusted(event); return getAnalytics(Boolean(force)); });
+  ipcMain.handle("analytics:import", (event) => { assertTrusted(event); return importAnalyticsHistory(); });
   ipcMain.handle("settings:get", (event) => { assertTrusted(event); return settings; });
   ipcMain.handle("settings:save", async (event, value) => {
     assertTrusted(event);
@@ -531,6 +679,7 @@ app.on("second-instance", () => {
 app.whenReady().then(async () => {
   app.setAppUserModelId("com.samanjoy.hfaccessdesk");
   await loadSettings();
+  try { notifiedUpdateVersion = JSON.parse(await readFile(path.join(app.getPath("userData"), "update-notice.json"), "utf8")).version || ""; } catch { /* No update notice has been recorded yet. */ }
   applyNativeTheme();
   nativeTheme.on("updated", () => {
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setBackgroundColor(nativeTheme.shouldUseDarkColors ? "#11151c" : "#ffffff");
@@ -539,7 +688,10 @@ app.whenReady().then(async () => {
     version: app.getVersion(),
     directory: path.join(app.getPath("userData"), "updates"),
     enabled: app.isPackaged && process.platform === "win32",
-    emit: (state) => sendToRenderer("updates:changed", state),
+    emit: (state) => {
+      sendToRenderer("updates:changed", state);
+      announceUpdate(state).catch(() => {});
+    },
   });
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
   registerIpc();

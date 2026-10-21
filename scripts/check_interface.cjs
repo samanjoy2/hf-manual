@@ -142,6 +142,43 @@ async function main() {
     await navigate("demo=dashboard");
     if (!(await evaluate(`document.documentElement.dataset.theme === 'dark'`))) throw new Error('Theme did not persist across reload');
     console.log('System appearance changes and dark-mode persistence across reload passed');
+    const analytics = await evaluate(`(async () => {
+      const assert = (condition, message) => { if (!condition) throw new Error(message); };
+      const $ = selector => document.querySelector(selector);
+      const change = (selector, value) => { $(selector).value = value; $(selector).dispatchEvent(new Event('change', { bubbles: true })); };
+      $('#analyticsButton').click();
+      await new Promise(resolve => setTimeout(resolve, 50));
+      assert(!$('#analyticsContent').classList.contains('hidden') && $('#dashboardContent').classList.contains('hidden'), 'Dedicated analytics section');
+      assert($('#analyticsRows').children.length === 5, 'All gated and open datasets');
+      assert($('#analyticsSummary strong').textContent.replace(/[^0-9]/g, '') === '3810', '30-day aggregate');
+      assert($('#analyticsRows tr:last-child td:nth-child(3)').textContent === '—', 'Unavailable lifetime count');
+      assert(document.querySelectorAll('#analyticsTrend .chart-point').length === 30, 'Recorded local observations');
+      change('#analyticsMetric', 'downloadsAllTime');
+      assert(document.querySelectorAll('#analyticsBars .analytics-bar').length === 4, 'Do not plot unavailable totals as zero');
+      assert(!$('#analyticsTrend svg'), 'Do not graph incomplete portfolio history');
+      change('#analyticsDataset', 'sample-lab/Clinical-Language-Benchmark');
+      assert($('#analyticsRows').children.length === 1 && $('#analyticsTrend svg'), 'Dataset drill-down');
+      $('#analyticsImport').click();
+      await new Promise(resolve => setTimeout(resolve, 50));
+      assert($('#analyticsSource').value === 'publisher' && $('#analyticsTrendTitle').textContent.includes('Daily downloads'), 'Imported daily history');
+      assert(document.querySelectorAll('#analyticsTrend .chart-point').length === 30, 'Imported points');
+      let exported;
+      const originalCreate = URL.createObjectURL, originalClick = HTMLAnchorElement.prototype.click;
+      URL.createObjectURL = blob => { exported = blob; return originalCreate(blob); };
+      HTMLAnchorElement.prototype.click = () => {};
+      $('#analyticsExport').click();
+      URL.createObjectURL = originalCreate; HTMLAnchorElement.prototype.click = originalClick;
+      assert((await exported.text()).split('\\r\\n').length === 2, 'Export the selected dataset');
+      return 'Analytics totals, missing values, comparison charts, drill-down, CSV imports, and export passed';
+    })()`);
+    console.log(analytics);
+    for (const width of [1440, 940, 640]) {
+      await send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: false });
+      const dimensions = await evaluate('({ width: innerWidth, scroll: document.documentElement.scrollWidth })');
+      if (dimensions.scroll > dimensions.width) throw new Error('Analytics layout overflow at ' + width);
+    }
+    await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+    await evaluate(`document.querySelector('.nav-item[data-status="pending"]').click()`);
     await navigate("demo=dashboard&rows=65");
     const pagination = await evaluate(`(async () => {
       const assert = (condition, message) => { if (!condition) throw new Error(message); };
